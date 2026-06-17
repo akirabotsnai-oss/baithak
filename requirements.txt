@@ -1,0 +1,6 @@
+quart
+discord.py
+asyncpg
+bcrypt
+httpx
+python-dotenv
