@@ -61,7 +61,7 @@ def require_app_access(app_id: str):
         @wraps(f)
         async def decorated(*args, **kwargs):
             if "user" not in session:
-                return redirect(url_for("login"))
+                return redirect("/")
             if is_god_or_god2():
                 return await f(*args, **kwargs)
             user = session["user"]
@@ -87,7 +87,7 @@ def require_app_permission(app_id: str, permission: str):
         @wraps(f)
         async def decorated(*args, **kwargs):
             if "user" not in session:
-                return redirect(url_for("login"))
+                return redirect("/")
             if is_god_or_god2():
                 return await f(*args, **kwargs)
             user = session["user"]
