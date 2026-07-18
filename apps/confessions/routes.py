@@ -393,6 +393,24 @@ async def api(path):
         if s in ["system", "embed", "messages", "server", "bot-identity"]:
             for k, v in req.items():
                 await set_cfg(k, v)
+            # If pfp changed, update Discord bot avatar
+            if s == "bot-identity" and "bot_pfp_url" in req and req["bot_pfp_url"] and BOT_TOKEN:
+                pfp_url = req["bot_pfp_url"]
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        img_resp = await client.get(pfp_url)
+                        if img_resp.status_code == 200:
+                            import base64
+                            ct = img_resp.headers.get("content-type", "image/png")
+                            b64 = base64.b64encode(img_resp.content).decode()
+                            avatar_data = f"data:{ct};base64,{b64}"
+                            await client.patch(
+                                "https://discord.com/api/v10/users/@me",
+                                headers={"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"},
+                                json={"avatar": avatar_data}
+                            )
+                except Exception as e:
+                    print(f"Avatar update failed: {e}")
             return jsonify({"ok": True})
         if s == "blacklist":
             action = path.split("/")[2] if len(path.split("/")) > 2 else ""
