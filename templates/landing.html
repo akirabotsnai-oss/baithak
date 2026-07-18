@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baithak — System Initialization</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: 'Inter', sans-serif;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    
+    .splash-container {
+      text-align: center;
+      z-index: 10;
+      transition: opacity 0.5s ease;
+    }
+    
+    .brand-icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      box-shadow: 0 0 40px rgba(59, 130, 246, 0.4);
+      color: white;
+      animation: float 4s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    
+    .title {
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+      background: linear-gradient(to right, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .subtitle {
+      font-size: 16px;
+      color: #94a3b8;
+      margin-bottom: 48px;
+      max-width: 400px;
+      line-height: 1.6;
+    }
+    
+    .btn-launch {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 16px 40px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+    }
+    
+    .btn-launch:hover {
+      background: #2563eb;
+      transform: scale(1.05);
+      box-shadow: 0 15px 30px rgba(59, 130, 246, 0.4);
+    }
+    
+    /* Terminal Loading Screen (Hidden Initially) */
+    .terminal-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: #000;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      padding: 40px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #10b981;
+      z-index: 50;
+    }
+    
+    .terminal-line {
+      font-size: 14px;
+      margin-bottom: 8px;
+      opacity: 0;
+    }
+    
+    .progress-bar-container {
+      width: 100%;
+      max-width: 500px;
+      height: 4px;
+      background: #1f2937;
+      margin-top: 20px;
+      border-radius: 4px;
+      overflow: hidden;
+      opacity: 0;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      transition: width 0.1s linear;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="splash-container" id="splash">
+    <div class="brand-icon">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+    </div>
+    <h1 class="title">BAITHAK OS</h1>
+    <p class="subtitle">Unified Command Center for Discord Bot Operations. Secure environment initialization required.</p>
+    <button class="btn-launch" onclick="startBootSequence()">Launch Command Center</button>
+  </div>
+
+  <div class="terminal-overlay" id="terminal">
+    <div class="terminal-line" id="line1">> INITIATING SECURE HANDSHAKE...</div>
+    <div class="terminal-line" id="line2">> DECRYPTING AUTHENTICATION MODULES...</div>
+    <div class="terminal-line" id="line3">> ESTABLISHING DATABASE CONNECTION...</div>
+    <div class="terminal-line" id="line4">> ROUTING TO SECURE LOGIN GATEWAY...</div>
+    <div class="progress-bar-container" id="progress-container">
+      <div class="progress-bar" id="progress"></div>
+    </div>
+  </div>
+
+  <script>
+    function startBootSequence() {
+      // Hide Splash
+      document.getElementById('splash').style.opacity = '0';
+      
+      setTimeout(() => {
+        document.getElementById('splash').style.display = 'none';
+        const term = document.getElementById('terminal');
+        term.style.display = 'flex';
+        
+        const lines = [
+          document.getElementById('line1'),
+          document.getElementById('line2'),
+          document.getElementById('line3'),
+          document.getElementById('line4'),
+          document.getElementById('progress-container')
+        ];
+        
+        // Show lines with delay
+        lines.forEach((line, index) => {
+          setTimeout(() => {
+            line.style.opacity = '1';
+          }, index * 400);
+        });
+        
+        // Animate progress bar
+        setTimeout(() => {
+          const bar = document.getElementById('progress');
+          let width = 0;
+          const interval = setInterval(() => {
+            width += Math.random() * 15;
+            if (width >= 100) {
+              width = 100;
+              clearInterval(interval);
+              // Redirect to login url
+              setTimeout(() => {
+                window.location.href = "{{ login_url }}";
+              }, 300);
+            }
+            bar.style.width = width + '%';
+          }, 100);
+        }, 1600);
+        
+      }, 500);
+    }
+  </script>
+</body>
+</html>

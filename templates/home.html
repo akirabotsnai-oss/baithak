@@ -1,0 +1,45 @@
+{% extends "shell.html" %}
+{% block title %}Dashboard Home{% endblock %}
+{% block page_title %}Dashboard Home{% endblock %}
+
+{% block content %}
+<div class="genz-header">
+  <h1 class="genz-title">What's good, <span class="genz-highlight">{{ user }}</span> ✨</h1>
+  <p class="text-muted" style="font-size:16px;">Welcome to your command center. Select an app to launch.</p>
+</div>
+
+<div class="grid-2">
+  {% if apps %}
+    {% for app in apps %}
+    <div class="widget genz-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px;">
+        <div class="genz-icon">
+          {% if app.id == 'confession_bot' or app.id == 'confessions' %}
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          {% elif app.id == 'bump_bot' %}
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          {% else %}
+          <span style="font-size: 24px;">{{ app.icon_emoji or '📦' }}</span>
+          {% endif %}
+        </div>
+        <a href="{{ app.route_prefix }}/" class="btn btn-primary" style="text-decoration:none; border-radius: 999px; font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px;">Launch App 🚀</a>
+      </div>
+      
+      <h3 class="genz-card-title">{{ app.display_name }}</h3>
+      <p class="text-muted text-sm" style="margin-bottom:24px;">{{ app.description }}</p>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-light); padding-top:16px;">
+        <span class="text-xs text-muted font-semibold" style="text-transform:uppercase; letter-spacing: 1px;">Access Level</span>
+        <span class="badge badge-success genz-badge">{% if role == 'god' or role == 'god2' %}GOD MODE{% else %}MEMBER{% endif %}</span>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="widget" style="grid-column: 1 / -1; text-align:center; padding: 64px; border: 2px dashed var(--border-color); background: transparent; box-shadow: none;">
+      <div style="font-size: 64px; margin-bottom: 16px;">🫠</div>
+      <h3 style="font-size: 24px; font-weight: 800; margin-bottom: 8px;">It's empty in here...</h3>
+      <p class="text-muted text-sm mt-4" style="max-width: 400px; margin: 0 auto;">No applications found. If you are Byte (God), check your database to ensure `workspace_apps` has active entries!</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

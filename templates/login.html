@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baithak — Sign In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #050a15;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    /* Emoji Wallpaper Background */
+    .emoji-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #1e1f22; /* Discord dark theme color */
+      z-index: 1;
+      overflow: hidden;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: space-evenly;
+      justify-content: space-evenly;
+      opacity: 0.15;
+      font-size: 32px;
+      user-select: none;
+      pointer-events: none;
+    }
+    .emoji-bg span {
+      margin: 20px 40px;
+      transform: rotate(calc(var(--r) * 1deg));
+    }
+    
+    /* Glassmorphism Card without Outlines */
+    .glass-card {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 400px;
+      padding: 48px 40px;
+      background: rgba(255, 255, 255, 0.02);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-radius: 28px;
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+      color: #fff;
+    }
+    
+    .brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+    
+    .brand-icon {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+      color: white;
+    }
+    
+    .title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.5);
+      text-align: center;
+    }
+    
+    .error-box {
+      background: rgba(239, 68, 68, 0.1);
+      border-left: 3px solid #ef4444;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      color: #fca5a5;
+      font-size: 13px;
+    }
+    
+    .form-group {
+      margin-bottom: 24px;
+    }
+    
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 8px;
+    }
+    
+    .form-control {
+      width: 100%;
+      padding: 16px 20px;
+      background: rgba(255, 255, 255, 0.04);
+      border: none;
+      border-radius: 16px;
+      font-family: inherit;
+      font-size: 14px;
+      color: #fff;
+      transition: all 0.3s ease;
+    }
+    
+    .form-control::placeholder {
+      color: rgba(255, 255, 255, 0.2);
+    }
+    
+    .form-control:focus {
+      outline: none;
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+    }
+    
+    .btn-submit {
+      width: 100%;
+      padding: 16px;
+      background: #fff;
+      color: #050a15;
+      border: none;
+      border-radius: 16px;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 8px;
+    }
+    
+    .btn-submit:hover {
+      background: #f8fafc;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(255, 255, 255, 0.15);
+    }
+    
+    .footer-link {
+      display: block;
+      text-align: center;
+      margin-top: 32px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.4);
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+    
+    .footer-link:hover {
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Emoji Wallpaper Background -->
+  <div class="emoji-bg">
+    <span style="--r: 15;">🚀</span><span style="--r: -10;">💬</span><span style="--r: 5;">⚙️</span>
+    <span style="--r: -25;">✨</span><span style="--r: 20;">🛡️</span><span style="--r: 0;">🔧</span>
+    <span style="--r: 30;">👾</span><span style="--r: -15;">🤖</span><span style="--r: 10;">🔥</span>
+    <span style="--r: -5;">⚡</span><span style="--r: 25;">🚀</span><span style="--r: -20;">💬</span>
+    <span style="--r: 15;">⚙️</span><span style="--r: -10;">✨</span><span style="--r: 5;">🛡️</span>
+    <span style="--r: -30;">🔧</span><span style="--r: 20;">👾</span><span style="--r: -5;">🤖</span>
+    <span style="--r: 10;">🔥</span><span style="--r: -25;">⚡</span><span style="--r: 15;">🚀</span>
+    <span style="--r: -10;">💬</span><span style="--r: 5;">⚙️</span><span style="--r: -20;">✨</span>
+    <span style="--r: 30;">🛡️</span><span style="--r: 0;">🔧</span><span style="--r: -15;">👾</span>
+    <span style="--r: 10;">🤖</span><span style="--r: -5;">🔥</span><span style="--r: 25;">⚡</span>
+  </div>
+
+  <!-- Glassmorphic Login Card -->
+  <div class="glass-card">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      </div>
+      <div class="title">{% if active == 'register' %}Create Account{% else %}Welcome Back{% endif %}</div>
+      <div class="subtitle">Access the Baithak Dashboard</div>
+    </div>
+
+    {% if error %}
+    <div class="error-box">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST">
+      <div class="form-group">
+        <label class="form-label" for="username">Username</label>
+        <input type="text" name="username" id="username" class="form-control" placeholder="Identifier" required autofocus autocomplete="username">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <input type="password" name="password" id="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      
+      <button type="submit" class="btn-submit">
+        {% if active == 'register' %}Register{% else %}Sign In{% endif %}
+      </button>
+    </form>
+    
+    {% if active != 'register' %}
+    <a href="/register" class="footer-link">Don't have an account? Request access</a>
+    {% else %}
+    <a href="/login" class="footer-link">Already have an account? Sign in</a>
+    {% endif %}
+  </div>
+
+</body>
+</html>

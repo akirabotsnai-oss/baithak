@@ -1,0 +1,272 @@
+{% extends "shell.html" %}
+{% block title %}Auto Bumper{% endblock %}
+{% block page_title %}Auto Bumper{% endblock %}
+
+{% block sidebar_nav %}
+<a href="/bump/" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+  Dashboard
+</a>
+<a href="/bump/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+  Settings
+</a>
+{% endblock %}
+
+{% block extra_styles %}
+.mac-window {
+  background: #0f172a;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.mac-header {
+  background: #1e293b;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.mac-dots {
+  display: flex;
+  gap: 8px;
+}
+.mac-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.mac-dot.red { background: #ff5f56; }
+.mac-dot.yellow { background: #ffbd2e; }
+.mac-dot.green { background: #27c93f; }
+.mac-title {
+  flex: 1;
+  text-align: center;
+  color: #94a3b8;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-left: -44px; /* Offset the dots */
+}
+.terminal-card {
+  color: #38bdf8;
+  font-family: 'Consolas', 'Courier New', monospace;
+  padding: 20px;
+  font-size: 13px;
+  height: 250px;
+  overflow-y: auto;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+  scrollbar-width: thin;
+}
+.terminal-card p { margin: 0 0 8px; line-height: 1.5; text-shadow: 0 0 10px rgba(56, 189, 248, 0.2); }
+.terminal-card .ts { color: #64748b; font-weight: normal; }
+.terminal-card .err { color: #f87171; text-shadow: 0 0 10px rgba(248, 113, 113, 0.4); }
+.terminal-card .warn { color: #fbbf24; text-shadow: 0 0 10px rgba(251, 191, 36, 0.4); }
+.terminal-card .ok { color: #34d399; text-shadow: 0 0 10px rgba(52, 211, 153, 0.4); }
+
+.bump-account-card {
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.bump-timer {
+  font-family: monospace;
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--accent);
+}
+{% endblock %}
+
+{% block content %}
+<div class="genz-header" style="padding: 24px; margin-bottom: 24px;">
+  <h1 class="genz-title" style="font-size: 24px;">🚀 Auto Bumper <span class="genz-highlight">Multi-Account</span></h1>
+  <p class="text-muted">Automated Discord server bumping utility.</p>
+</div>
+
+{% if active == 'dashboard' %}
+<div class="grid-2">
+  <div class="widget genz-card" style="grid-column: 1 / -1;" id="accounts-container">
+    <h3 class="genz-card-title mb-4">Active Accounts</h3>
+    <div id="accounts-list">Loading...</div>
+  </div>
+
+  <div class="widget genz-card" style="grid-column: 1 / -1; background: transparent; border-color: transparent; box-shadow: none; padding: 0;">
+    <h3 class="genz-card-title mb-4" style="padding: 0 16px;">Live Logs</h3>
+    <div class="mac-window">
+      <div class="mac-header">
+        <div class="mac-dots">
+          <div class="mac-dot red"></div>
+          <div class="mac-dot yellow"></div>
+          <div class="mac-dot green"></div>
+        </div>
+        <div class="mac-title">bump_service.sh</div>
+      </div>
+      <div class="terminal-card" id="term-box"></div>
+    </div>
+  </div>
+</div>
+{% elif active == 'settings' %}
+<div class="widget genz-card">
+  <h3 class="genz-card-title mb-4">Add New Account</h3>
+  <div class="form-group mb-4">
+    <label>Account / Server Name</label>
+    <input type="text" id="new-name" class="form-control" placeholder="e.g. My Main Server">
+  </div>
+  <div class="form-group mb-4">
+    <label>Discord User Token</label>
+    <input type="password" id="new-token" class="form-control" placeholder="YOUR_USER_TOKEN">
+  </div>
+  <div class="form-group mb-4">
+    <label>Guild ID</label>
+    <input type="text" id="new-guild" class="form-control" placeholder="123456789">
+  </div>
+  <div class="form-group mb-4">
+    <label>Channel ID</label>
+    <input type="text" id="new-channel" class="form-control" placeholder="987654321">
+  </div>
+  <button class="btn btn-primary" onclick="addAccount()" style="width: 100%; border-radius: 999px;">+ Add Account</button>
+</div>
+
+<div class="widget genz-card">
+  <h3 class="genz-card-title mb-4">Manage Accounts</h3>
+  <div style="overflow-x:auto;">
+    <table class="table" style="width:100%; text-align:left;">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Bumps</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="settings-accounts-list">
+        <tr><td colspan="4">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+let accountsData = [];
+
+function formatTime(seconds) {
+  if(seconds <= 0) return "00:00:00";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+}
+
+async function fetchStatus() {
+  try {
+    const res = await fetch('/bump/api/status');
+    const data = await res.json();
+    accountsData = data.accounts || [];
+    renderUI();
+    if(document.getElementById('term-box')) {
+      const tb = document.getElementById('term-box');
+      tb.innerHTML = (data.logs || []).map(l => {
+        let c = 'ok';
+        if(l.l.includes('warn')) c = 'warn';
+        if(l.l.includes('err')) c = 'err';
+        return `<p><span class="ts">[${l.t}]</span> <span class="${c}">[${l.l.toUpperCase()}]</span> ${l.m}</p>`;
+      }).join('');
+    }
+  } catch(e) { console.error(e); }
+}
+
+function renderUI() {
+  const dashList = document.getElementById('accounts-list');
+  const setList = document.getElementById('settings-accounts-list');
+  
+  if (dashList) {
+    if(accountsData.length === 0) {
+      dashList.innerHTML = '<p class="text-muted">No accounts added. Go to Settings.</p>';
+    } else {
+      dashList.innerHTML = accountsData.map(acc => `
+        <div class="bump-account-card">
+          <div>
+            <div style="font-weight:bold; font-size:16px;">${acc.name}</div>
+            <div class="text-sm text-muted">Status: ${acc.status}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="bump-timer">${formatTime(acc.remaining)}</div>
+            <button class="btn btn-utility" style="margin-top:8px; font-size:11px;" onclick="forceBump(${acc.id})">Force Bump</button>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+  
+  if (setList) {
+    if(accountsData.length === 0) {
+      setList.innerHTML = '<tr><td colspan="4" class="text-muted">No accounts configured.</td></tr>';
+    } else {
+      setList.innerHTML = accountsData.map(acc => `
+        <tr>
+          <td style="font-weight:bold;">${acc.name}</td>
+          <td><span class="badge ${acc.is_enabled ? 'badge-success' : 'badge-danger'}">${acc.is_enabled ? 'Active' : 'Disabled'}</span></td>
+          <td>${acc.bump_count}</td>
+          <td>
+            <button class="btn btn-utility" onclick="toggleAcc(${acc.id}, ${acc.is_enabled ? 'false' : 'true'})">${acc.is_enabled ? 'Disable' : 'Enable'}</button>
+            <button class="btn btn-danger" style="padding:4px 8px;" onclick="delAcc(${acc.id})">X</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+  }
+}
+
+async function addAccount() {
+  const payload = {
+    name: document.getElementById('new-name').value,
+    token: document.getElementById('new-token').value,
+    guild_id: document.getElementById('new-guild').value,
+    channel_id: document.getElementById('new-channel').value
+  };
+  const res = await apiCall('/bump/api/accounts/add', payload, 'Account added');
+  if(res) {
+    document.getElementById('new-name').value = '';
+    document.getElementById('new-token').value = '';
+    document.getElementById('new-guild').value = '';
+    document.getElementById('new-channel').value = '';
+    fetchStatus();
+  }
+}
+
+async function delAcc(id) {
+  if(confirm('Delete account?')) {
+    const res = await apiCall('/bump/api/accounts/delete', {id}, 'Account deleted');
+    if(res) fetchStatus();
+  }
+}
+
+async function toggleAcc(id, enable) {
+  const res = await apiCall('/bump/api/accounts/toggle', {id, enabled: enable}, 'Account toggled');
+  if(res) fetchStatus();
+}
+
+async function forceBump(id) {
+  const res = await apiCall('/bump/api/bump-now', {account_id: id}, 'Bump forced');
+  if(res) fetchStatus();
+}
+
+setInterval(() => {
+  accountsData.forEach(a => { if (a.remaining > 0) a.remaining--; });
+  renderUI();
+}, 1000);
+
+fetchStatus();
+setInterval(fetchStatus, 10000);
+</script>
+{% endblock %}

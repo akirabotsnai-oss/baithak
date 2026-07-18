@@ -1,0 +1,378 @@
+{% extends "shell.html" %}
+{% block title %}Workspace Members{% endblock %}
+{% block page_title %}Workspace Members{% endblock %}
+
+{% block sidebar_nav %}
+<a href="/workspace/members" class="nav-item active">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+  All Members
+</a>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 24px;">
+  <div>
+    <h1 style="font-size:24px; margin-bottom:8px;">Workspace Team</h1>
+    <p class="text-muted text-sm">Manage access, roles, and application permissions.</p>
+  </div>
+  <button class="btn btn-primary" onclick="document.getElementById('create-modal').classList.add('open')">
+    + Add Member
+  </button>
+</div>
+
+<!-- System Config (Owner Only) -->
+{% if role == 'god' %}
+<div class="widget" style="margin-bottom: 24px; border-color: var(--info);">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h3 style="font-size:16px; display:flex; align-items:center; gap:8px;">
+      <span style="color:var(--info);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+      </span>
+      System Security Config
+    </h3>
+  </div>
+  
+  <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+    <div style="flex:1; min-width:200px;">
+      <label class="form-label" style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Secret Login URL Path</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="secret-url-input" class="form-control" style="background:var(--bg-body); border:1px solid var(--border-color); padding:8px 12px; border-radius:8px; width:100%; font-family:monospace;" value="{{ request.host_url }}{{ secret_path }}" readonly>
+        <button class="btn btn-secondary" onclick="copySecretUrl()" title="Copy Access Link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+      </div>
+    </div>
+    
+    <div style="flex:1; min-width:200px;">
+      <label class="form-label" style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Change Secret Path (Requires Bot Restart)</label>
+      <form id="change-secret-form" style="display:flex; gap:8px;" onsubmit="event.preventDefault(); changeSecretPath();">
+        <input type="text" id="new-secret-path" class="form-control" style="background:var(--bg-body); border:1px solid var(--border-color); padding:8px 12px; border-radius:8px; width:100%;" placeholder="e.g. new-secret-link" required>
+        <button type="submit" class="btn btn-primary">Update</button>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+  function copySecretUrl() {
+    const input = document.getElementById('secret-url-input');
+    navigator.clipboard.writeText(input.value);
+    alert('Access link copied to clipboard!');
+  }
+  
+  async function changeSecretPath() {
+    const newPath = document.getElementById('new-secret-path').value;
+    if (!confirm('Are you sure you want to change the secret login URL? You will be logged out and the bot must restart!')) return;
+    
+    try {
+      const res = await fetch('/api/workspace/system/secret', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({new_path: newPath})
+      });
+      if (res.ok) {
+        alert('Secret Path updated successfully! Restart the server to apply changes, then visit the new URL.');
+        window.location.reload();
+      } else {
+        const data = await res.json();
+        alert('Error: ' + data.error);
+      }
+    } catch(err) {
+      alert('Network error.');
+    }
+  }
+</script>
+{% endif %}
+
+<!-- Pending Requests -->
+{% if pending_requests %}
+<div class="widget" style="margin-bottom: 24px; border-color: var(--warning);">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h3 style="font-size:16px; display:flex; align-items:center; gap:8px;">
+      <span style="color:var(--warning);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      </span>
+      Pending Requests
+    </h3>
+    <span class="badge badge-warning">{{ pending_requests|length }}</span>
+  </div>
+  <div class="table-container">
+    <table class="dashboard-table">
+      <thead><tr><th>Username</th><th>Submitted</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+      <tbody>
+        {% for r in pending_requests %}
+        <tr id="req-{{ r.id }}">
+          <td class="font-semibold">{{ r.username }}</td>
+          <td class="text-muted text-sm">{{ r.requested_at[:16].replace('T',' ') }}</td>
+          <td><span class="badge badge-warning">Pending</span></td>
+          <td style="text-align:right;">
+            <div style="display:inline-flex; gap:8px; align-items:center;">
+              <select id="role-req-{{ r.id }}" class="input-field" style="width:auto; padding:6px 12px; height:auto;">
+                <option value="admin">Admin</option>
+                <option value="god2">God2</option>
+              </select>
+              <button class="btn btn-primary" style="padding:6px 12px; font-size:12px;" onclick="approveRequest({{ r.id }})">Approve</button>
+              <button class="btn btn-danger" style="padding:6px 12px; font-size:12px;" onclick="rejectRequest({{ r.id }})">Reject</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Members Table -->
+<div class="widget">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h3 style="font-size:16px;">Active Members</h3>
+    <div style="position:relative;">
+      <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" class="input-field" placeholder="Search members…" id="search-members" oninput="filterTable('search-members', 'members-table')" style="padding-left:36px; width:250px;">
+    </div>
+  </div>
+  
+  <div class="table-container">
+    <table class="dashboard-table" id="members-table">
+      <thead>
+        <tr>
+          <th>Member</th>
+          <th>Role</th>
+          <th>Status</th>
+          {% for app in apps %}<th style="text-align:center;">{{ app.display_name }}</th>{% endfor %}
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in members %}
+        <tr id="member-row-{{ m.username }}">
+          <td>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div class="avatar">{{ m.username[:1].upper() }}</div>
+              <div class="font-semibold">{{ m.username }}</div>
+            </div>
+          </td>
+          <td>
+            <span class="badge badge-gray">
+              {% if m.role == 'god' %}God
+              {% elif m.role == 'god2' %}God2
+              {% else %}Admin{% endif %}
+            </span>
+          </td>
+          <td>
+            {% if m.is_revoked %}
+            <span class="badge badge-danger">Suspended</span>
+            {% else %}
+            <span class="badge badge-success">Active</span>
+            {% endif %}
+          </td>
+          
+          {% for app in apps %}
+          {% set app_role = member_access.get(m.username, {}).get(app.id) %}
+          <td style="text-align:center;">
+            {% if app_role is not none %}
+            <button class="badge badge-info" style="border:none; cursor:pointer;" onclick="revokeAccess('{{ m.username }}', '{{ app.id }}')">
+              ✓ {{ app_role or 'viewer' }}
+            </button>
+            {% else %}
+            <button class="badge badge-gray" style="border:none; cursor:pointer;" onclick="grantAccess('{{ m.username }}', '{{ app.id }}')">
+              + Grant
+            </button>
+            {% endif %}
+          </td>
+          {% endfor %}
+          
+          <td style="text-align:right;">
+            <div style="display:inline-flex; gap:8px;">
+              <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="openMemberPanel('{{ m.username }}')">Manage</button>
+              {% if not m.is_revoked %}
+              <button class="btn btn-danger" style="padding:6px 12px; font-size:12px;" onclick="suspendMember('{{ m.username }}', true)">Suspend</button>
+              {% else %}
+              <button class="btn btn-primary" style="padding:6px 12px; font-size:12px;" onclick="suspendMember('{{ m.username }}', false)">Reinstate</button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ apps|length + 4 }}" style="text-align:center; padding:32px; color:var(--text-muted);">No members yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Create Member -->
+<div class="sidebar-overlay" id="create-modal" style="display:none; align-items:center; justify-content:center; z-index:50;">
+  <div class="widget" style="width:100%; max-width:400px; position:relative; box-shadow:var(--shadow-lg);">
+    <h3 style="margin-bottom:20px; font-size:18px;">Add New Member</h3>
+    <div id="create-error" style="display:none; margin-bottom:16px; color:var(--danger); font-size:13px; background:rgba(239,68,68,0.1); padding:10px; border-radius:var(--radius-sm);"></div>
+    
+    <div class="form-group">
+      <label class="form-label" for="new-username">Username</label>
+      <input type="text" id="new-username" class="input-field" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="new-password">Password</label>
+      <input type="password" id="new-password" class="input-field">
+    </div>
+    <div class="form-group" style="margin-bottom:24px;">
+      <label class="form-label" for="new-role">Initial Role</label>
+      <select id="new-role" class="input-field">
+        <option value="admin">Admin</option>
+        <option value="god2">God2</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:12px; justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="document.getElementById('create-modal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="createMember()">Create Member</button>
+    </div>
+  </div>
+</div>
+
+<!-- Side Panel: Manage Member Apps -->
+<div class="sidebar-overlay" id="member-panel-overlay" onclick="closeMemberPanel()" style="z-index:45;"></div>
+<div id="member-panel" style="position:fixed; top:0; right:-400px; width:400px; height:100vh; background:var(--bg-sidebar); border-left:1px solid var(--border-color); z-index:46; transition:right 0.3s ease; box-shadow:var(--shadow-lg); display:flex; flex-direction:column;">
+  <div style="padding:24px; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <div id="panel-member-name" class="font-semibold" style="font-size:18px;"></div>
+      <div class="text-xs text-muted">App Access & Roles</div>
+    </div>
+    <button onclick="closeMemberPanel()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+  </div>
+  <div style="padding:24px; flex:1; overflow-y:auto;">
+    <h4 style="font-size:14px; margin-bottom:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Service Assignments</h4>
+    {% for app in apps %}
+    <div style="margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid var(--border-light);">
+      <div class="font-semibold text-sm mb-4">{{ app.display_name }}</div>
+      <select id="role-select-{{ app.id }}" class="input-field" onchange="setAppRole(currentPanelUser, '{{ app.id }}', this.value)">
+        <option value="">No access</option>
+        <option value="viewer">Viewer</option>
+        <option value="moderator">Moderator</option>
+        <option value="operator">Operator</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    {% endfor %}
+    
+    <h4 style="font-size:14px; margin-top:32px; margin-bottom:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Global Settings</h4>
+    <div style="margin-bottom:20px;">
+      <label class="form-label" style="font-size:13px;">Global Role</label>
+      <select id="panel-global-role" class="input-field" onchange="setGlobalRole(currentPanelUser, this.value)">
+        <option value="admin">Admin</option>
+        <option value="god2">God2</option>
+        <option value="god">God (Owner)</option>
+      </select>
+    </div>
+    
+    <div style="margin-bottom:20px;">
+      <label class="form-label" style="font-size:13px;">Reset Password</label>
+      <div style="display:flex; gap:8px;">
+        <input type="password" id="panel-new-pass" class="input-field" placeholder="New password...">
+        <button class="btn btn-secondary" onclick="resetUserPassword(currentPanelUser, document.getElementById('panel-new-pass').value)">Reset</button>
+      </div>
+    </div>
+    
+    <div style="margin-top:40px; padding-top:20px; border-top:1px solid rgba(239, 68, 68, 0.2);">
+      <h4 style="font-size:14px; margin-bottom:12px; color:var(--danger); text-transform:uppercase; letter-spacing:0.05em;">Danger Zone</h4>
+      <button class="btn btn-danger" style="width:100%;" onclick="deleteUser(currentPanelUser)">Permanently Delete User</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Utility class for modal toggles via JS */
+#create-modal.open { display: flex !important; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPanelUser = null;
+const memberAccess = {{ member_access | tojson }};
+
+function openMemberPanel(username) {
+  currentPanelUser = username;
+  document.getElementById('panel-member-name').textContent = username;
+  const userAccess = memberAccess[username] || {};
+  {% for app in apps %}
+  const s{{ loop.index }} = document.getElementById('role-select-{{ app.id }}');
+  if (s{{ loop.index }}) s{{ loop.index }}.value = userAccess['{{ app.id }}'] || '';
+  {% endfor %}
+  document.getElementById('member-panel-overlay').classList.add('open');
+  document.getElementById('member-panel').style.right = '0';
+}
+function closeMemberPanel() {
+  document.getElementById('member-panel-overlay').classList.remove('open');
+  document.getElementById('member-panel').style.right = '-400px';
+}
+
+async function grantAccess(username, appId) {
+  const role = prompt(`Grant "${username}" access to "${appId}". Enter role:`, 'viewer');
+  if (!role) return;
+  const res = await apiCall(`/api/workspace/members/${username}/grant`, {app_id: appId, app_role: role}, 'Access granted!');
+  if (res) setTimeout(() => location.reload(), 500);
+}
+async function revokeAccess(username, appId) {
+  if (!confirm(`Revoke ${username}'s access to ${appId}?`)) return;
+  const res = await apiCall(`/api/workspace/members/${username}/revoke`, {app_id: appId}, 'Access revoked.');
+  if (res) setTimeout(() => location.reload(), 500);
+}
+async function setAppRole(username, appId, role) {
+  if (!username) return;
+  if (!role) await apiCall(`/api/workspace/members/${username}/revoke`, {app_id: appId}, 'Access removed.');
+  else await apiCall(`/api/workspace/members/${username}/grant`, {app_id: appId, app_role: role}, 'Role updated!');
+}
+async function suspendMember(username, suspend) {
+  const res = await apiCall(`/api/workspace/members/${username}/suspend`, {revoke: suspend},
+    suspend ? 'Member suspended.' : 'Member reinstated.');
+  if (res) setTimeout(() => location.reload(), 500);
+}
+async function createMember() {
+  const username = document.getElementById('new-username')?.value.trim();
+  const password = document.getElementById('new-password')?.value.trim();
+  const role = document.getElementById('new-role')?.value;
+  const errEl = document.getElementById('create-error');
+  if (!username || !password) {
+    if (errEl) { errEl.style.display='block'; errEl.textContent='Username and password are required.'; }
+    return;
+  }
+  const res = await fetch('/api/workspace/members/create', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username, password, role})
+  });
+  const data = await res.json();
+  if (data.ok) { toast('Member created!'); setTimeout(() => location.reload(), 800); }
+  else { if (errEl) { errEl.style.display='block'; errEl.textContent=data.error||'An error occurred.'; } }
+}
+async function approveRequest(rid) {
+  const role = document.getElementById(`role-req-${rid}`)?.value || 'admin';
+  if (!confirm(`Approve as ${role}?`)) return;
+  const res = await apiCall(`/api/workspace/requests/${rid}/approve`, {role}, 'Member approved!');
+  if (res) document.getElementById(`req-${rid}`)?.remove();
+}
+async function rejectRequest(rid) {
+  if (!confirm('Reject this request?')) return;
+  const res = await apiCall(`/api/workspace/requests/${rid}/reject`, {}, 'Request rejected.');
+  if (res) document.getElementById(`req-${rid}`)?.remove();
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Are you absolutely sure you want to permanently delete ${username}? This cannot be undone.`)) return;
+  const res = await apiCall(`/api/workspace/members/${username}/delete`, {}, 'User deleted successfully.');
+  if (res) setTimeout(() => location.reload(), 800);
+}
+
+async function setGlobalRole(username, role) {
+  if (!role) return;
+  const res = await apiCall(`/api/workspace/members/${username}/global-role`, {role}, 'Global role updated.');
+  if (res) setTimeout(() => location.reload(), 800);
+}
+
+async function resetUserPassword(username, password) {
+  if (!password) { toast('Password cannot be empty!', 'error'); return; }
+  if (!confirm(`Are you sure you want to overwrite ${username}'s password?`)) return;
+  const res = await apiCall(`/api/workspace/members/${username}/reset-password`, {password}, 'Password reset successfully.');
+  if (res) document.getElementById('panel-new-pass').value = '';
+}
+</script>
+{% endblock %}

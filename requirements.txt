@@ -4,3 +4,5 @@ asyncpg
 bcrypt
 httpx
 python-dotenv
+cryptography
+hypercorn

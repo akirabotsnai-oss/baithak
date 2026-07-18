@@ -1,0 +1,16 @@
+{% extends "shell.html" %}
+{% block title %}Access Denied — Command Center{% endblock %}
+{% block content %}
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 120px);text-align:center;padding:40px;">
+    <div style="font-size:72px;margin-bottom:24px;">🔒</div>
+    <h1 style="font-size:36px;font-weight:800;margin-bottom:12px;">Access Denied</h1>
+    <p style="color:var(--text-muted);font-size:15px;max-width:400px;line-height:1.6;margin-bottom:32px;">
+        You don't have permission to access this area.<br>
+        Contact your workspace administrator to request access.
+    </p>
+    <div style="display:flex;gap:12px;">
+        <a href="/" class="btn primary">← Go Home</a>
+        <a href="/logout" class="btn danger">Logout</a>
+    </div>
+</div>
+{% endblock %}
