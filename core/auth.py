@@ -36,7 +36,7 @@ def require_login(f):
     @wraps(f)
     async def decorated(*args, **kwargs):
         if "user" not in session:
-            return redirect(url_for("login"))
+            return redirect("/")
         return await f(*args, **kwargs)
     return decorated
 
@@ -145,7 +145,7 @@ async def base_ctx() -> dict:
         user=user,
         is_main=session.get("is_main", False),
         role=role,
-        secret_path=os.environ.get("SECRET_PATH", "cmd-9x4k2"),
+        secret_path=await cfg("secret_path", "cmd-9x4k2"),
         accessible_apps=accessible_apps,
         can_export=role in (ROLE_GOD, ROLE_GOD2),
         can_perm_delete=role in (ROLE_GOD, ROLE_GOD2),

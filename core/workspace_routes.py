@@ -291,24 +291,14 @@ async def reset_password(username):
 @require_login
 @require_god
 async def set_secret_url():
-    import os
     data = await request.json or {}
     new_path = data.get("new_path", "").strip()
     if not new_path or not new_path.isalnum() and "-" not in new_path:
         return jsonify({"ok": False, "error": "Invalid path format (alphanumeric and dashes only)"})
     
-    # Read .env and replace SECRET_PATH
-    env_file = os.path.join(os.getcwd(), ".env")
-    if os.path.exists(env_file):
-        with open(env_file, "r") as f:
-            lines = f.readlines()
-        with open(env_file, "w") as f:
-            for line in lines:
-                if line.startswith("SECRET_PATH="):
-                    f.write(f"SECRET_PATH={new_path}\n")
-                else:
-                    f.write(line)
-                    
-    os.environ["SECRET_PATH"] = new_path
+    from core.db import set_cfg
+    await set_cfg("secret_path", new_path)
+    
     await log_audit(session["user"], "system_config", f"Changed secret path to {new_path}")
     return jsonify({"ok": True})
+

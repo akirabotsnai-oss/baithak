@@ -44,7 +44,7 @@
     </div>
     
     <div style="flex:1; min-width:200px;">
-      <label class="form-label" style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Change Secret Path (Requires Bot Restart)</label>
+      <label class="form-label" style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Change Secret Path</label>
       <form id="change-secret-form" style="display:flex; gap:8px;" onsubmit="event.preventDefault(); changeSecretPath();">
         <input type="text" id="new-secret-path" class="form-control" style="background:var(--bg-body); border:1px solid var(--border-color); padding:8px 12px; border-radius:8px; width:100%;" placeholder="e.g. new-secret-link" required>
         <button type="submit" class="btn btn-primary">Update</button>
@@ -61,7 +61,7 @@
   
   async function changeSecretPath() {
     const newPath = document.getElementById('new-secret-path').value;
-    if (!confirm('Are you sure you want to change the secret login URL? You will be logged out and the bot must restart!')) return;
+    if (!confirm('Are you sure you want to change the secret login URL? You will be logged out!')) return;
     
     try {
       const res = await fetch('/api/workspace/system/secret', {
@@ -70,8 +70,8 @@
         body: JSON.stringify({new_path: newPath})
       });
       if (res.ok) {
-        alert('Secret Path updated successfully! Restart the server to apply changes, then visit the new URL.');
-        window.location.reload();
+        alert('Secret Path updated successfully! You will now be redirected to the new login page.');
+        window.location.href = '/' + newPath;
       } else {
         const data = await res.json();
         alert('Error: ' + data.error);

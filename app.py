@@ -40,7 +40,6 @@ app.config.update(
 
 DATABASE_URL      = os.environ.get("DATABASE_URL")
 BOT_TOKEN         = os.environ.get("BOT_TOKEN", "")
-SECRET_PATH       = os.environ.get("SECRET_PATH", "cmd-9x4k2")
 PUBLIC_CHANNEL_ID = os.environ.get("PUBLIC_CHANNEL_ID", "")
 ADMIN_CHANNEL_ID  = os.environ.get("ADMIN_CHANNEL_ID", "")
 GUILD_ID          = int(os.environ.get("GUILD_ID", "0") or "0")
@@ -136,7 +135,8 @@ _last_leak_alert = None
 @app.before_request
 async def track_visitor():
     from core.db import query, cfg
-    if request.path in (f"/{SECRET_PATH}", f"/{SECRET_PATH}/"):
+    secret_path = await cfg("secret_path", "cmd-9x4k2")
+    if request.path in (f"/{secret_path}", f"/{secret_path}/"):
         if "user" not in session:
             ip  = request.headers.get("X-Forwarded-For", request.remote_addr or "Unknown").split(',')[0].strip()
             ua  = request.headers.get("User-Agent", "")
@@ -178,10 +178,14 @@ async def track_visitor():
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
 _login_attempts = {}
 
-@app.route(f"/{SECRET_PATH}", methods=["GET", "POST"])
-@app.route(f"/{SECRET_PATH}/", methods=["GET", "POST"])
-async def login():
+@app.route("/<path:secret>", methods=["GET", "POST"])
+async def dynamic_login(secret):
     from core.db import query, cfg, log_audit
+    from quart import abort
+    real_secret = await cfg("secret_path", "cmd-9x4k2")
+    if secret != real_secret:
+        abort(404)
+        
     if "user" in session:
         return redirect(url_for("workspace.home"))
     error = None
@@ -226,7 +230,12 @@ async def logout():
     if "user" in session:
         await log_audit(session["user"], "logout", "Admin logged out")
     session.clear()
-    return redirect(url_for("login"))
+    return redirect("/")
+
+
+@app.route("/ping")
+async def ping():
+    return jsonify({"status": "alive", "timestamp": datetime.utcnow().isoformat()})
 
 
 @app.route("/register", methods=["GET", "POST"])
