@@ -11,7 +11,7 @@ import bcrypt
 from datetime import datetime
 from quart import Blueprint, render_template, session, redirect, url_for, request, jsonify
 
-from core.db import query, log_audit
+from core.db import query, log_audit, cfg
 from core.auth import (
     require_login, require_god, is_god_or_god2, is_god,
     base_ctx, ROLE_GOD, ROLE_GOD2, ROLE_ADMIN, current_role
