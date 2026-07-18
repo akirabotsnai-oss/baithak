@@ -117,6 +117,24 @@ async def startup():
     if BOT_TOKEN and BOT_TOKEN != "YOUR_BOT_TOKEN_HERE":
         asyncio.create_task(bot.start(BOT_TOKEN))
 
+    # Self-ping to keep Render free tier awake 24/7
+    async def keep_alive():
+        # Render automatically sets RENDER_EXTERNAL_URL for every service
+        base_url = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
+        if not base_url:
+            return  # Not on Render, skip (local dev)
+        await asyncio.sleep(30)  # Wait for server to fully start first
+        while True:
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    await client.get(f"{base_url}/ping")
+                    print(f"[keep-alive] pinged {base_url}/ping")
+            except Exception as e:
+                print(f"[keep-alive] ping failed: {e}")
+            await asyncio.sleep(540)  # Ping every 9 minutes
+
+    asyncio.create_task(keep_alive())
+
 
 
 
@@ -294,6 +312,15 @@ async def confess(interaction: discord.Interaction, message: str, image: str = N
     await interaction.response.defer(ephemeral=True)
     user_id  = str(interaction.user.id)
     username = str(interaction.user)
+
+    # ── Guild lock: only allow confessions from the configured server ──
+    allowed_guild = await cfg("guild_id", str(GUILD_ID))
+    if allowed_guild and allowed_guild != "0":
+        if not interaction.guild or str(interaction.guild.id) != allowed_guild:
+            return await interaction.followup.send(
+                "❌ This bot is private and only works in its home server.",
+                ephemeral=True
+            )
 
     if await cfg("enabled", "1") == "0":
         return await interaction.followup.send(await cfg("msg_paused"), ephemeral=True)
