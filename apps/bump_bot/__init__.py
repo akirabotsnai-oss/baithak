@@ -325,6 +325,8 @@ def _generate_nonce() -> str:
 def _random_session() -> str:
     return ''.join(random.choices(string.hexdigits.lower(), k=32))
 
+import re
+
 async def do_discord_bump(token: str, guild_id: str, channel_id: str, cmd: dict):
     payload = {
         "type": 2, "application_id": "302050872383242240",
@@ -342,8 +344,6 @@ async def do_discord_bump(token: str, guild_id: str, channel_id: str, cmd: dict)
                 "https://discord.com/api/v10/interactions",
                 headers=_HEADERS(token), json=payload, timeout=10
             )
-            if r.status_code == 204:   
-                return True, "ok", 0
             if r.status_code == 429:
                 try:
                     retry_after = r.json().get("retry_after", 60)
@@ -356,8 +356,44 @@ async def do_discord_bump(token: str, guild_id: str, channel_id: str, cmd: dict)
                 return False, "channel_missing", 0
             if r.status_code >= 500:   
                 return False, "discord_down", 0
+            if r.status_code != 204:
+                return False, f"http_{r.status_code}", 0
+
+            # Success so far. Wait for Disboard to reply in chat to sync cooldown.
+            await asyncio.sleep(4)
             
-            return False, f"http_{r.status_code}", 0
+            msg_r = await client.get(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages?limit=10",
+                headers=_HEADERS(token), timeout=10
+            )
+            if msg_r.status_code != 200:
+                return False, "no_response", 600
+
+            messages = msg_r.json()
+            for msg in messages:
+                if msg.get("author", {}).get("id") == "302050872383242240":
+                    embeds = msg.get("embeds", [])
+                    text = ""
+                    if embeds and "description" in embeds[0]:
+                        text = embeds[0]["description"].lower()
+                    text += msg.get("content", "").lower()
+                    
+                    if "bump done" in text or "check it out on disboard" in text:
+                        return True, "ok", 0
+                        
+                    wait_match = re.search(r'wait another (\d+) minute', text)
+                    if wait_match:
+                        mins = int(wait_match.group(1))
+                        return False, "disboard_cooldown", mins * 60
+                        
+                    hr_match = re.search(r'wait another (\d+) hour', text)
+                    if hr_match:
+                        hrs = int(hr_match.group(1))
+                        return False, "disboard_cooldown", hrs * 3600
+                        
+                    return False, "no_response", 600
+                    
+            return False, "no_response", 600
     except Exception as e:
         return False, str(e), 0
 
@@ -377,6 +413,10 @@ async def bump_bot_loop():
     COOLDOWN_BASE = 7200
     global _disboard_down_alerted
     
+    # On startup, force a sync for all active accounts!
+    await query("UPDATE bump_accounts SET last_bump_time='0'")
+    push_bump_log("System", "🔄 Timers reset to 0 to sync active accounts", "info")
+
     # Track specific rate limit retry timestamps per account
     rate_limits = {}
     global_backoff_until = 0
@@ -490,6 +530,19 @@ async def bump_bot_loop():
                     )
                     push_bump_log(name, f"✅ Bump #{new_count} successful! Next bump in ~2h", "bump")
                     spawn_task(delayed_anti_sus_msg(token, channel_id, name))
+                    
+                elif reason == "disboard_cooldown":
+                    mins = int(extra / 60)
+                    push_bump_log(name, f"🕒 Sync: Disboard said wait {mins} minutes", "warn")
+                    await query("UPDATE bump_accounts SET status='Waiting' WHERE id=?", acc_id)
+                    new_last_bump = now - actual_cooldown + extra
+                    await query("UPDATE bump_accounts SET last_bump_time=? WHERE id=?", str(new_last_bump), acc_id)
+                    
+                elif reason == "no_response":
+                    push_bump_log(name, "⚠️ Disboard unresponsive/offline — retrying in 10m", "warn")
+                    await query("UPDATE bump_accounts SET status='Waiting' WHERE id=?", acc_id)
+                    new_last_bump = now - actual_cooldown + 600
+                    await query("UPDATE bump_accounts SET last_bump_time=? WHERE id=?", str(new_last_bump), acc_id)
 
                 elif reason == "rate_limited":
                     push_bump_log(name, f"⚠️ Rate limited by Discord — pausing for {extra}s", "warn")
