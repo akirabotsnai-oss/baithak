@@ -24,13 +24,7 @@ async def main():
     await init_db_pool()
     
     print("Starting background bump loop...")
-    # Add dummy bot wait_until_ready override if bot doesn't connect
-    if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        async def dummy_wait():
-            pass
-        bot.wait_until_ready = dummy_wait
-
-    asyncio.create_task(bump_bot_loop(bot))
+    asyncio.create_task(bump_bot_loop())
     
     if BOT_TOKEN and BOT_TOKEN != "YOUR_BOT_TOKEN_HERE":
         print("Logging in to Discord...")

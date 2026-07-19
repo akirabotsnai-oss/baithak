@@ -6,6 +6,7 @@ Supports multiple bump accounts using the bump_accounts table.
 import time
 import random
 import string
+import traceback
 import httpx
 import asyncio
 from datetime import datetime
@@ -331,116 +332,146 @@ async def do_discord_bump(token: str, guild_id: str, channel_id: str, cmd: dict)
 # ─── Background Loop ──────────────────────────────────────────────────────────
 
 _cached_cmds = {}
-_notified = set()
 _disboard_down_alerted = False
 
-async def bump_bot_loop(bot):
-    await bot.wait_until_ready()
-    push_bump_log("System", "Multi-Account Auto-Bump Service Initialized", "info")
+# Statuses that are "active/waiting" — do not need re-authentication
+_ACTIVE_STATUSES = {"Waiting", "Bumping...", "Rate Limited", "Retrying..."}
+
+async def bump_bot_loop():
+    """Background loop — checks enabled accounts every 10 s, bumps when cooldown expires.
+    Uses httpx directly. No discord.py bot object needed."""
+    await asyncio.sleep(3)  # brief startup grace period
+    push_bump_log("System", "🚀 Auto-Bump loop started", "info")
     COOLDOWN = 7200
     global _disboard_down_alerted
 
     while True:
         try:
+            # ── 1. Load enabled accounts ──────────────────────────────────────
             accounts = await query("SELECT * FROM bump_accounts WHERE is_enabled=1") or []
             if not accounts:
-                await asyncio.sleep(10)
+                push_bump_log("System", "No enabled accounts — sleeping 30s", "warn")
+                await asyncio.sleep(30)
                 continue
 
+            # ── 2. Disboard health check (non-blocking: skip, don't halt) ────
             disboard_up = await check_disboard_status()
             if not disboard_up:
                 if not _disboard_down_alerted:
-                    push_bump_log("System", "Disboard is down — retrying in 5 mins", "warn")
+                    push_bump_log("System", "Disboard appears down — will retry next cycle", "warn")
                     _disboard_down_alerted = True
-                await asyncio.sleep(300)
+                # Don't sleep 300s — just skip this iteration and try again in 10s
+                await asyncio.sleep(10)
                 continue
             else:
                 if _disboard_down_alerted:
-                    push_bump_log("System", "Disboard recovered!", "info")
+                    push_bump_log("System", "Disboard is back up ✅", "info")
                     _disboard_down_alerted = False
 
+            # ── 3. Process each account ───────────────────────────────────────
             for acc in accounts:
-                acc_id = acc["id"]
-                name = acc["name"]
+                acc_id   = acc["id"]
+                name     = acc["name"]
+                status   = acc["status"] or "Offline"
+                guild_id = acc["guild_id"]
+                channel_id = acc["channel_id"]
+                last_bump  = float(acc["last_bump_time"] or 0)
+                remaining  = max(0.0, COOLDOWN - (time.time() - last_bump))
+
+                # ── 3a. Decrypt token ─────────────────────────────────────────
                 token = decrypt_token(acc["token"])
                 if not token:
                     if status != "Error: Bad Token":
+                        push_bump_log(name, "Token decryption failed — marking bad token", "error")
                         await query("UPDATE bump_accounts SET status='Error: Bad Token' WHERE id=?", acc_id)
                     continue
-                guild_id = acc["guild_id"]
-                channel_id = acc["channel_id"]
-                last_bump = float(acc["last_bump_time"] or 0)
-                status = acc["status"]
-                
-                remaining = max(0.0, COOLDOWN - (time.time() - last_bump))
 
-                if status in ("Offline", "Starting...", "Connecting...", "Error: Bad Token"):
+                # ── 3b. Auth / connect if not active ─────────────────────────
+                if status not in _ACTIVE_STATUSES:
+                    push_bump_log(name, f"Status '{status}' → connecting...", "info")
                     await query("UPDATE bump_accounts SET status='Connecting...' WHERE id=?", acc_id)
+
                     username = await verify_discord_user_token(token)
                     if not username:
+                        push_bump_log(name, "Token rejected by Discord — bad token", "error")
                         await query("UPDATE bump_accounts SET status='Error: Bad Token' WHERE id=?", acc_id)
                         continue
-                    
+
                     if acc_id not in _cached_cmds:
+                        push_bump_log(name, "Fetching /bump command from Discord...", "info")
                         cmd = await get_discord_bump_command(token, guild_id)
                         if cmd:
                             _cached_cmds[acc_id] = cmd
+                            push_bump_log(name, f"Got /bump command (id={cmd['id']})", "info")
                         else:
+                            push_bump_log(name, "Could not find /bump command — is Disboard in this server?", "error")
                             await query("UPDATE bump_accounts SET status='Error: Command Fetch Failed' WHERE id=?", acc_id)
                             continue
 
-                    await query("UPDATE bump_accounts SET status='Online' WHERE id=?", acc_id)
-                    continue
+                    push_bump_log(name, f"✅ Online as {username} | cooldown remaining: {int(remaining)}s", "info")
+                    await query("UPDATE bump_accounts SET status='Waiting' WHERE id=?", acc_id)
+                    continue  # wait for next iteration to bump
 
+                # ── 3c. Still on cooldown — idle ──────────────────────────────
                 if remaining > 10:
                     if status != "Waiting":
                         await query("UPDATE bump_accounts SET status='Waiting' WHERE id=?", acc_id)
-                    
-                    if random.random() < 0.003:  # ~0.3% chance per 10s loop (~2 times per 2 hrs)
+                    # ~0.3% chance per 10s → ~2 idle messages per 2-hour cooldown
+                    if random.random() < 0.003:
                         quote = random.choice(IDLE_COMPLAINTS)
                         asyncio.create_task(send_discord_channel_message(token, channel_id, quote))
-                        push_bump_log(name, f"Sent idle complaint: {quote}", "info")
-                        
+                        push_bump_log(name, f"💬 Idle message sent", "info")
                     continue
 
-                # Ready to bump!
+                # ── 3d. Cooldown expired → bump! ──────────────────────────────
+                push_bump_log(name, "⏰ Cooldown expired — bumping now!", "info")
                 await query("UPDATE bump_accounts SET status='Bumping...' WHERE id=?", acc_id)
+
+                # Ensure we have the slash command cached
                 cmd = _cached_cmds.get(acc_id)
                 if not cmd:
+                    push_bump_log(name, "Command not cached — re-fetching...", "info")
                     cmd = await get_discord_bump_command(token, guild_id)
-                    _cached_cmds[acc_id] = cmd
-                
-                if not cmd:
-                    await query("UPDATE bump_accounts SET status='Error: Command Fetch Failed' WHERE id=?", acc_id)
-                    continue
-                
-                push_bump_log(name, "Sending /bump to Discord...", "info")
+                    if cmd:
+                        _cached_cmds[acc_id] = cmd
+                    else:
+                        push_bump_log(name, "Re-fetch failed — skipping this bump cycle", "error")
+                        await query("UPDATE bump_accounts SET status='Error: Command Fetch Failed' WHERE id=?", acc_id)
+                        continue
+
                 success, reason = await do_discord_bump(token, guild_id, channel_id, cmd)
-                
+
                 if success:
-                    now_ts = time.time()
+                    now_ts    = time.time()
                     new_count = (acc["bump_count"] or 0) + 1
-                    await query("UPDATE bump_accounts SET last_bump_time=?, bump_count=?, status='Waiting' WHERE id=?", str(now_ts), new_count, acc_id)
-                    push_bump_log(name, f"Bump #{new_count} successful!", "bump")
-                    
-                    if True:  # 100% chance to send a random message
-                        asyncio.create_task(delayed_anti_sus_msg(token, channel_id, name))
+                    await query(
+                        "UPDATE bump_accounts SET last_bump_time=?, bump_count=?, status='Waiting' WHERE id=?",
+                        str(now_ts), new_count, acc_id
+                    )
+                    push_bump_log(name, f"✅ Bump #{new_count} successful! Next bump in ~2h", "bump")
+                    # Send a random anti-sus message 2-5s after the bump
+                    asyncio.create_task(delayed_anti_sus_msg(token, channel_id, name))
+
                 elif reason == "rate_limited":
-                    push_bump_log(name, "Rate limited — waiting 5 mins", "warn")
+                    push_bump_log(name, "⚠️ Rate limited by Discord — will retry next cycle", "warn")
                     await query("UPDATE bump_accounts SET status='Rate Limited' WHERE id=?", acc_id)
+
                 elif reason == "bad_token":
-                    push_bump_log(name, "Token verification failed!", "error")
+                    push_bump_log(name, "❌ Token rejected during bump — re-auth next cycle", "error")
                     await query("UPDATE bump_accounts SET status='Error: Bad Token' WHERE id=?", acc_id)
-                else:
-                    push_bump_log(name, f"Bump failed ({reason})", "warn")
-                    await query("UPDATE bump_accounts SET status='Retrying...' WHERE id=?", acc_id)
                     _cached_cmds.pop(acc_id, None)
 
-            # Prevent busy looping when no bumps are due
+                else:
+                    push_bump_log(name, f"⚠️ Bump failed: {reason} — will retry", "warn")
+                    await query("UPDATE bump_accounts SET status='Waiting' WHERE id=?", acc_id)
+                    _cached_cmds.pop(acc_id, None)
+
             await asyncio.sleep(10)
+
         except Exception as e:
             print("Error in bump loop:", e)
-            push_bump_log("System", f"Loop exception: {e}", "error")
+            traceback.print_exc()
+            push_bump_log("System", f"💥 Loop exception: {e}", "error")
             await asyncio.sleep(30)
 
 
