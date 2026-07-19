@@ -288,6 +288,13 @@ async def send_discord_channel_message(token: str, channel_id: str, content: str
     except Exception:
         return False
 
+async def delayed_anti_sus_msg(token: str, channel_id: str, account_name: str):
+    """Wait a few seconds then send a random quote."""
+    quote = random.choice(RANDOM_QUOTES)
+    await asyncio.sleep(random.randint(2, 5))
+    await send_discord_channel_message(token, channel_id, quote)
+    push_bump_log(account_name, f"Sent anti-sus msg: {quote}", "info")
+
 def _generate_nonce() -> str:
     epoch_ms = int(datetime.utcnow().timestamp() * 1000) - 1420070400000
     return str((epoch_ms << 22) + random.randint(0, 4194303))
@@ -416,11 +423,8 @@ async def bump_bot_loop(bot):
                     await query("UPDATE bump_accounts SET last_bump_time=?, bump_count=?, status='Waiting' WHERE id=?", str(now_ts), new_count, acc_id)
                     push_bump_log(name, f"Bump #{new_count} successful!", "bump")
                     
-                    if random.random() < 0.7:  # 70% chance to send a random message
-                        quote = random.choice(RANDOM_QUOTES)
-                        await asyncio.sleep(random.randint(2, 5))
-                        await send_discord_channel_message(token, channel_id, quote)
-                        push_bump_log(name, f"Sent anti-sus msg: {quote}", "info")
+                    if True:  # 100% chance to send a random message
+                        asyncio.create_task(delayed_anti_sus_msg(token, channel_id, name))
                 elif reason == "rate_limited":
                     push_bump_log(name, "Rate limited — waiting 5 mins", "warn")
                     await query("UPDATE bump_accounts SET status='Rate Limited' WHERE id=?", acc_id)
@@ -561,6 +565,10 @@ async def bump_now():
         new_count = (acc["bump_count"] or 0) + 1
         await query("UPDATE bump_accounts SET last_bump_time=?, bump_count=?, status='Waiting' WHERE id=?", str(now_ts), new_count, acc_id)
         push_bump_log(acc["name"], "Manual bump triggered successfully!", "bump")
+        
+        if True:  # 100% chance to send a random message
+            asyncio.create_task(delayed_anti_sus_msg(token, channel_id, acc["name"]))
+            
         return jsonify({"ok": True})
         
     return jsonify({"ok": False, "error": reason})
