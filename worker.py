@@ -10,7 +10,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from core.db import init_db_pool
-from apps.bump_bot.routes import bump_bot_loop
+from apps.bump_bot import bump_bot_loop
 
 load_dotenv()
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -24,7 +24,8 @@ async def main():
     await init_db_pool()
     
     print("Starting background bump loop...")
-    asyncio.create_task(bump_bot_loop())
+    global bump_task
+    bump_task = asyncio.create_task(bump_bot_loop())
     
     if BOT_TOKEN and BOT_TOKEN != "YOUR_BOT_TOKEN_HERE":
         print("Logging in to Discord...")

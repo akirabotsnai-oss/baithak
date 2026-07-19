@@ -58,8 +58,8 @@ async def startup():
 
     if pool:
         # Start bump bot loop
-        from apps.bump_bot.routes import bump_bot_loop
-        asyncio.create_task(bump_bot_loop())
+        from apps.bump_bot import bump_bot_loop
+        app.bump_task = asyncio.create_task(bump_bot_loop())
         
         # Ensure workspace tables exist (idempotent)
         await query("""
