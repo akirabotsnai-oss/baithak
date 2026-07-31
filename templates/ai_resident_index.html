@@ -88,12 +88,17 @@
 
       <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: auto;">
         {% if guild.is_bot_present %}
-        <span class="badge badge-success" style="font-size: 10px; padding: 4px 10px; border-radius: 99px;">Bot Online</span>
-        <a href="/ai_resident/guild/{{ guild.id }}" class="btn btn-primary" style="font-size: 11px; padding: 6px 14px; text-decoration: none; border-radius: 99px;">Manage AI ⚙️</a>
+        <span class="badge badge-success" style="font-size: 10px; padding: 4px 10px; border-radius: 99px;">Bot Active</span>
         {% else %}
-        <span class="badge badge-danger" style="font-size: 10px; padding: 4px 10px; border-radius: 99px; background: rgba(239, 68, 68, 0.2); color: #f87171;">Bot Offline</span>
-        <a href="https://discord.com/api/oauth2/authorize?client_id={{ cfg('DISCORD_CLIENT_ID') }}&permissions=8&scope=bot%20applications.commands" target="_blank" class="btn btn-secondary" style="font-size: 11px; padding: 6px 14px; text-decoration: none; border-radius: 99px;">Invite Bot 📥</a>
+        <span class="badge badge-warning" style="font-size: 10px; padding: 4px 10px; border-radius: 99px; background: rgba(241, 196, 15, 0.2); color: #f1c40f;">Not Invited Yet</span>
         {% endif %}
+        
+        <div style="display:flex; gap:6px;">
+          {% if not guild.is_bot_present %}
+          <a href="https://discord.com/api/oauth2/authorize?client_id={{ cfg('DISCORD_CLIENT_ID') }}&permissions=8&scope=bot%20applications.commands" target="_blank" class="btn btn-secondary" style="font-size: 10px; padding: 5px 10px; text-decoration: none; border-radius: 99px;">Invite 📥</a>
+          {% endif %}
+          <a href="/ai_resident/guild/{{ guild.id }}" class="btn btn-primary" style="font-size: 11px; padding: 6px 14px; text-decoration: none; border-radius: 99px;">Manage AI ⚙️</a>
+        </div>
       </div>
     </div>
     {% endfor %}

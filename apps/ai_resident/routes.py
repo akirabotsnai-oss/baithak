@@ -168,7 +168,10 @@ async def guild_settings(guild_id):
                 break
 
     if not guild_meta:
-        return redirect(url_for("workspace.access_denied"))
+        if await is_god_or_god2():
+            guild_meta = {"id": guild_id, "name": f"Server {guild_id}", "icon": None}
+        else:
+            return redirect(url_for("workspace.access_denied"))
 
     # Fetch configuration and active stats
     guild_config = await get_guild_cfgs(guild_id)
