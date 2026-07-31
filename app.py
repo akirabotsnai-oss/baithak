@@ -140,11 +140,9 @@ async def startup():
         
         @ai_bot.event
         async def on_ready():
-            from core.db import cfg
-            gid = await cfg("guild_id", str(GUILD_ID))
-            gid_int = int(gid) if gid and gid != "0" else None
-            await ai_bot.tree.sync(guild=discord.Object(id=gid_int) if gid_int else None)
-            print(f"[AI Resident] Dual Bot logged in as {ai_bot.user}")
+            # Sync globally so slash commands appear in all servers
+            await ai_bot.tree.sync()
+            print(f"[AI Resident] Dual Bot logged in as {ai_bot.user} — slash commands synced globally.")
 
         bot.ai_bot = ai_bot
         await ai_bot.add_cog(AIResidentCog(ai_bot))
@@ -273,11 +271,9 @@ import string as _string, random as _random
 
 @bot.event
 async def on_ready():
-    from core.db import cfg
-    gid = await cfg("guild_id", str(GUILD_ID))
-    gid_int = int(gid) if gid and gid != "0" else None
-    await bot.tree.sync(guild=discord.Object(id=gid_int) if gid_int else None)
-    print(f"Bot logged in as {bot.user}")
+    # Sync slash commands globally (works in all guilds, takes ~1 hour to propagate)
+    await bot.tree.sync()
+    print(f"[Main Bot] logged in as {bot.user} — slash commands synced globally.")
 
 
 # ─── Register Blueprints ──────────────────────────────────────────────────────

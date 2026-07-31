@@ -210,6 +210,9 @@ class AIResidentCog(commands.Cog):
         if message.author.bot:
             return
 
+        # 0. Game check (trivia / hangman)
+        await self.on_message_game_check(message)
+
         # 1. Moderation & Danger Pre-Filter
         await self.process_moderation_filter(message)
 
@@ -684,12 +687,6 @@ class AIResidentCog(commands.Cog):
                     await message.reply(f"🎉 **Win!** {message.author.mention} ne guess kiya! Word tha: **{word}**")
                 else:
                     await message.reply(f"Word: `{display}`\nLives: `{game.data['lives']}`")
-
-    # Hook the game listener into general on_message via setup
-    # Note: discord.py events run in parallel. We can call game check manually in general on_message or register another listener.
-    @commands.Cog.listener()
-    async def on_message_games(self, message: discord.Message):
-        await self.on_message_game_check(message)
 
     # ─── Memory Forget Me Command ─────────────────────────────────────────────
     
