@@ -548,15 +548,21 @@ class AIResidentCog(commands.Cog):
     async def imagine(self, interaction: discord.Interaction, prompt: str):
         await interaction.response.defer()
         
+        import urllib.parse
+        # Encode prompt for URL safety
+        encoded_prompt = urllib.parse.quote(prompt)
+        
         # Check pluggable API key
         replicate_key = await cfg("REPLICATE_API_TOKEN")
         stability_key = await cfg("STABILITY_API_KEY")
         
         if not replicate_key and not stability_key:
             # Fallback to Pollinations AI (free, no keys required!)
-            url = f"https://image.pollinations.ai/prompt/{random.randint(1000,9999)}_{prompt.replace(' ', '%20')}?width=1024&height=1024&nologo=true"
-            embed = discord.Embed(title=f"🎨 Imagine: {prompt}", color=0x8a2be2)
+            seed = random.randint(1000, 9999)
+            url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width=1024&height=1024&nologo=true"
+            embed = discord.Embed(title=f"🎨 {prompt[:100]}", color=0x8a2be2)
             embed.set_image(url=url)
+            embed.set_footer(text="Powered by Pollinations AI (free)")
             return await interaction.followup.send(embed=embed)
         
         # If Stability AI is configured
@@ -588,14 +594,13 @@ class AIResidentCog(commands.Cog):
     @app_commands.command(name="meme", description="Generate a captioned meme")
     async def meme(self, interaction: discord.Interaction, caption: str, prompt: str = "funny template cartoon"):
         await interaction.response.defer()
-        
-        # We can fetch image from Pollinations and overlay text, or use Memegen API
-        # A fun approach: generate clean image using Pollinations, then use Memegen/apitemplate or display it beautifully
-        # Let's display it via Pollinations and include captioned text inside an embed
-        url = f"https://image.pollinations.ai/prompt/{random.randint(1000,9999)}_{prompt.replace(' ', '%20')}?width=800&height=800&nologo=true"
-        embed = discord.Embed(title=caption, color=0xf1c40f)
+        import urllib.parse
+        encoded = urllib.parse.quote(prompt)
+        seed = random.randint(1000, 9999)
+        url = f"https://image.pollinations.ai/prompt/{encoded}?seed={seed}&width=800&height=800&nologo=true"
+        embed = discord.Embed(title=caption[:100], color=0xf1c40f)
         embed.set_image(url=url)
-        embed.set_footer(text=f"Template prompt: {prompt}")
+        embed.set_footer(text=f"Prompt: {prompt[:80]}")
         await interaction.followup.send(embed=embed)
 
     # ─── Games Stateful Logic ─────────────────────────────────────────────────
@@ -784,4 +789,19 @@ class AIResidentCog(commands.Cog):
 
         return ""
 
+    # ─── Admin Commands ────────────────────────────────────────────────────────
 
+    @commands.command(name="sync")
+    async def sync_commands(self, ctx):
+        """Force re-sync all slash commands to this guild (instant)."""
+        try:
+            if ctx.guild:
+                self.bot.tree.copy_global_to(guild=ctx.guild)
+                synced = await self.bot.tree.sync(guild=ctx.guild)
+                await self.bot.tree.sync()  # global too
+                await ctx.send(f"✅ Synced {len(synced)} slash commands to **{ctx.guild.name}**! Try `/help` now.", delete_after=15)
+            else:
+                synced = await self.bot.tree.sync()
+                await ctx.send(f"✅ Synced {len(synced)} commands globally.", delete_after=15)
+        except Exception as e:
+            await ctx.send(f"❌ Sync failed: {e}", delete_after=15)

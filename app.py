@@ -140,9 +140,22 @@ async def startup():
         
         @ai_bot.event
         async def on_ready():
-            # Sync globally so slash commands appear in all servers
-            await ai_bot.tree.sync()
-            print(f"[AI Resident] Dual Bot logged in as {ai_bot.user} — slash commands synced globally.")
+            from core.db import cfg
+            gid = await cfg("guild_id", str(GUILD_ID))
+            synced_guilds = []
+            if gid and gid != "0":
+                guild_obj = discord.Object(id=int(gid))
+                ai_bot.tree.copy_global_to(guild=guild_obj)
+                await ai_bot.tree.sync(guild=guild_obj)
+                synced_guilds.append(gid)
+            else:
+                # Auto-detect: sync to every guild the bot is in for instant results
+                for g in ai_bot.guilds:
+                    ai_bot.tree.copy_global_to(guild=g)
+                    await ai_bot.tree.sync(guild=g)
+                    synced_guilds.append(str(g.id))
+            await ai_bot.tree.sync()  # global fallback
+            print(f"[AI Resident] {ai_bot.user} — synced to guilds: {synced_guilds}")
 
         bot.ai_bot = ai_bot
         await ai_bot.add_cog(AIResidentCog(ai_bot))
@@ -271,9 +284,35 @@ import string as _string, random as _random
 
 @bot.event
 async def on_ready():
-    # Sync slash commands globally (works in all guilds, takes ~1 hour to propagate)
+    from core.db import cfg
+    gid = await cfg("guild_id", str(GUILD_ID))
+    synced_guilds = []
+    if gid and gid != "0":
+        guild_obj = discord.Object(id=int(gid))
+        bot.tree.copy_global_to(guild=guild_obj)
+        await bot.tree.sync(guild=guild_obj)
+        synced_guilds.append(gid)
+    else:
+        # Auto-detect: sync to every guild the bot is in
+        for g in bot.guilds:
+            bot.tree.copy_global_to(guild=g)
+            await bot.tree.sync(guild=g)
+            synced_guilds.append(str(g.id))
+    await bot.tree.sync()  # global fallback
+    print(f"[Main Bot] {bot.user} — synced to guilds: {synced_guilds}")
+
+
+@bot.command(name="sync")
+async def manual_sync(ctx):
+    """Admin-only: force re-sync slash commands to this guild."""
+    from core.db import cfg
+    gid = str(ctx.guild.id) if ctx.guild else ""
+    if gid:
+        guild_obj = discord.Object(id=int(gid))
+        bot.tree.copy_global_to(guild=guild_obj)
+        await bot.tree.sync(guild=guild_obj)
     await bot.tree.sync()
-    print(f"[Main Bot] logged in as {bot.user} — slash commands synced globally.")
+    await ctx.send("✅ Slash commands force-synced! They should appear within seconds.", delete_after=10)
 
 
 # ─── Register Blueprints ──────────────────────────────────────────────────────
