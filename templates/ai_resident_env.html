@@ -1,0 +1,390 @@
+{% extends "shell.html" %}
+{% block title %}AI Resident — Global Keys Editor{% endblock %}
+{% block page_title %}Global Keys Editor 🔐{% endblock %}
+
+{% block extra_styles %}
+/* Custom glowing styles for a premium command center feel */
+.command-card {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.3s ease;
+}
+.command-card:hover {
+  border-color: rgba(138, 43, 226, 0.4);
+  box-shadow: 0 8px 32px 0 rgba(138, 43, 226, 0.15);
+}
+.section-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #c084fc;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 10px;
+}
+.help-bubble {
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  border-radius: 0 12px 12px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.glow-btn {
+  background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%);
+  border: none;
+  color: white;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+}
+.glow-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(138, 43, 226, 0.6);
+}
+.input-group-key {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.input-group-key input {
+  flex: 1;
+}
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 99px;
+  margin-left: auto;
+}
+.status-indicator.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+.status-indicator.empty {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+{% endblock %}
+
+{% block sidebar_nav %}
+<a href="/ai_resident/" class="nav-item">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+  Server Select
+</a>
+<a href="/ai_resident/admin/env" class="nav-item active">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+  Global Keys Editor
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2" style="max-width: 1200px; margin: 0 auto; gap: 32px; align-items: start;">
+  
+  <!-- Left Side: System Credentials Form -->
+  <div class="command-card">
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 22px; font-weight: 900; margin: 0 0 6px 0; background: linear-gradient(to right, #e9d5ff, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Credentials Command Center</h2>
+      <p class="text-muted" style="font-size: 13px; margin: 0;">Configure bot client keys, language model adapters, and web dashboard OAuth tokens.</p>
+    </div>
+
+    {% if success_msg %}
+    <div class="alert alert-success" style="padding:12px 24px; border-radius:12px; background: rgba(16, 185, 129, 0.1); color:#34d399; border:1px solid rgba(16, 185, 129, 0.2); font-weight:600; font-size:13px; margin-bottom: 24px;">
+      {{ success_msg }}
+    </div>
+    {% endif %}
+
+    <form method="POST" style="display:flex; flex-direction:column; gap:24px;">
+      
+      <!-- 🤖 BOT CLIENTS SECTION -->
+      <div>
+        <h3 class="section-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          1. Discord Bot Clients
+        </h3>
+        
+        <!-- AI Bot (Optional) -->
+        <div>
+          <div style="display:flex; align-items:center; margin-bottom:6px;">
+            <label style="font-size:12px; font-weight:700; margin: 0;">AI Resident Bot Token</label>
+            {% if cfg('AI_BOT_TOKEN') %}
+            <span class="status-indicator active">✓ Set</span>
+            {% else %}
+            <span class="status-indicator empty" style="color:var(--text-muted); background:rgba(255,255,255,0.05);">Shared Mode</span>
+            {% endif %}
+          </div>
+          <input type="password" name="AI_BOT_TOKEN" class="form-control" value="{{ cfg('AI_BOT_TOKEN', '') }}" placeholder="Enter AI Bot token..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+          <div class="help-bubble" style="border-left-color: #a855f7;">
+            <b>What is this?</b> Paste your AI Bot token here to run a separate AI Resident client. If left blank, the AI Resident runs on the main bot.
+          </div>
+        </div>
+      </div>
+
+      <!-- 🧠 LLM API ROTATOR SECTION -->
+      <div>
+        <h3 class="section-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          2. API Key Rotation Pools
+        </h3>
+        <p class="text-muted" style="font-size:11px; margin-top:-12px; margin-bottom:16px;">Add one or more keys. The bot automatically rotates keys to avoid Discord user spam rate limits (HTTP 429).</p>
+        
+        <!-- Groq Key Pool -->
+        <div style="margin-bottom:20px;">
+          <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px; color:#e2e8f0;">Groq API Keys (Llama 3.3 Default)</label>
+          <div id="groq_keys_container" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="addKeyField('groq_keys_container', 'GROQ_API_KEY')" style="margin-top:8px; border-radius:99px; font-size:11px;">➕ Add Groq Key</button>
+        </div>
+
+        <!-- Gemini Key Pool -->
+        <div style="margin-bottom:20px;">
+          <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px; color:#e2e8f0;">Gemini API Keys</label>
+          <div id="gemini_keys_container" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="addKeyField('gemini_keys_container', 'GEMINI_API_KEY')" style="margin-top:8px; border-radius:99px; font-size:11px;">➕ Add Gemini Key</button>
+        </div>
+
+        <!-- OpenAI Key Pool -->
+        <div>
+          <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px; color:#e2e8f0;">OpenAI API Keys</label>
+          <div id="openai_keys_container" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="addKeyField('openai_keys_container', 'OPENAI_API_KEY')" style="margin-top:8px; border-radius:99px; font-size:11px;">➕ Add OpenAI Key</button>
+        </div>
+      </div>
+
+      <!-- 🎨 IMAGE APIs SECTION -->
+      <div>
+        <h3 class="section-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          3. Image Generation Tokens
+        </h3>
+        
+        <div style="margin-bottom:12px;">
+          <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px;">Stability AI API Key</label>
+          <input type="password" name="STABILITY_API_KEY" class="form-control" value="{{ cfg('STABILITY_API_KEY', '') }}" placeholder="Enter key..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+        </div>
+
+        <div>
+          <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px;">Replicate API Token</label>
+          <input type="password" name="REPLICATE_API_TOKEN" class="form-control" value="{{ cfg('REPLICATE_API_TOKEN', '') }}" placeholder="Enter token..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+        </div>
+        <div class="help-bubble" style="border-left-color:#eab308;">
+          💡 <b>Keyless fallback:</b> If both keys are empty, `/imagine` will automatically fallback to <b>Pollinations AI</b> which is 100% free and requires no registration/keys.
+        </div>
+      </div>
+
+      <!-- 🔗 DASHBOARD CONFIG SECTION -->
+      <div>
+        <h3 class="section-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+          4. OAuth2 & Server Parameters
+        </h3>
+        
+        <div style="margin-bottom:12px;">
+          <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px;">Discord Client ID (Application ID)</label>
+          <input type="text" name="DISCORD_CLIENT_ID" class="form-control" value="{{ cfg('DISCORD_CLIENT_ID', '') }}" placeholder="Enter client ID..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px;">Discord Client Secret</label>
+          <input type="password" name="DISCORD_CLIENT_SECRET" class="form-control" value="{{ cfg('DISCORD_CLIENT_SECRET', '') }}" placeholder="Enter client secret..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px;">Redirect Redirect URI</label>
+          <input type="text" name="DISCORD_REDIRECT_URI" class="form-control" value="{{ cfg('DISCORD_REDIRECT_URI', 'http://localhost:5000/ai_resident/oauth/callback') }}" placeholder="http://..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+        </div>
+
+        <div style="border-top: 1px dashed rgba(255,255,255,0.05); padding-top:16px; display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px;">Discord Server ID (guild_id)</label>
+            <input type="text" name="guild_id" class="form-control" value="{{ cfg('guild_id', '') }}" placeholder="Enter server ID..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px;">Mod Alerts Channel ID (admin_channel_id)</label>
+            <input type="text" name="admin_channel_id" class="form-control" value="{{ cfg('admin_channel_id', '') }}" placeholder="Enter channel ID..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align:center; padding-top:16px;">
+        <button type="submit" class="btn glow-btn" style="padding:14px 40px; border-radius:99px; text-transform:uppercase; font-size:12px; font-weight:800; display:inline-flex; align-items:center; gap:8px;">
+          Save Setup Config 🔐
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Right Side: Discord Bot Profile Changer Form -->
+  <div class="command-card">
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 22px; font-weight: 900; margin: 0 0 6px 0; background: linear-gradient(to right, #ffd8a8, #ffd8a8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; color:#ffd8a8;">Discord Profile Manager</h2>
+      <p class="text-muted" style="font-size: 13px; margin: 0;">Customize bot usernames and profile pictures on-the-fly without accessing the developer portal.</p>
+    </div>
+
+    <div class="alert alert-warning" style="background: rgba(241, 196, 15, 0.08); border-radius: 12px; border:1px solid rgba(241, 196, 15, 0.15); color:#f59e0b; padding: 14px; font-size: 11px; margin-bottom: 24px; line-height: 1.5;">
+      ⚠️ <b>Rate Limit Guard:</b> Discord strict API regulations limit username/avatar profile modifications to maximum <b>2 changes per hour</b>. Use wisely!
+    </div>
+
+    <form id="bot_profile_form" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:20px;">
+      <input type="hidden" id="profile_bot_type" name="bot_type" value="ai">
+
+      <div>
+        <label style="display:block; font-size:12px; font-weight:700; margin-bottom:8px; color:#e2e8f0;">New Username Name</label>
+        <input type="text" id="profile_username" name="username" class="form-control" placeholder="Type new username name..." style="width:100%; padding:11px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+      </div>
+
+      <div>
+        <label style="display:block; font-size:12px; font-weight:700; margin-bottom:8px; color:#e2e8f0;">New Avatar Icon (Upload Square Image)</label>
+        <input type="file" id="profile_avatar" name="avatar" accept="image/*" class="form-control" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">
+        <span class="text-muted" style="font-size:10px; display:inline-block; margin-top:6px; line-height:1.4;">Recommended size: 512x512 PNG, JPEG, or WEBP formats.</span>
+      </div>
+
+      <div style="text-align:center; padding-top:16px;">
+        <button type="button" id="save_profile_btn" class="btn glow-btn" style="padding:12px 32px; border-radius:99px; font-size:12px; font-weight:800; text-transform:uppercase;">
+          Apply Profile Update 🎨
+        </button>
+      </div>
+    </form>
+  </div>
+  
+</div>
+
+<script>
+  // Dynamic Input list managers
+  function addKeyField(containerId, inputName, keyValue = "") {
+    const container = document.getElementById(containerId);
+    const div = document.createElement("div");
+    div.className = "input-group-key";
+    
+    const input = document.createElement("input");
+    input.type = "password";
+    input.name = inputName;
+    input.className = "form-control";
+    input.value = keyValue;
+    input.placeholder = "Enter API Key...";
+    input.style.padding = "11px";
+    input.style.borderRadius = "10px";
+    input.style.background = "rgba(0,0,0,0.3)";
+    input.style.color = "var(--text-color)";
+    input.style.border = "1px solid var(--border-light)";
+    
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "btn btn-secondary";
+    delBtn.style.padding = "11px 16px";
+    delBtn.style.borderRadius = "10px";
+    delBtn.innerText = "❌";
+    delBtn.onclick = () => div.remove();
+    
+    div.appendChild(input);
+    div.appendChild(delBtn);
+    container.appendChild(div);
+  }
+
+  // Populate dynamic keys on page load
+  document.addEventListener("DOMContentLoaded", () => {
+    const rawGroq = {{ cfg('GROQ_API_KEY', '[]') | tojson }};
+    populateKeys('groq_keys_container', 'GROQ_API_KEY', rawGroq);
+
+    const rawGemini = {{ cfg('GEMINI_API_KEY', '[]') | tojson }};
+    populateKeys('gemini_keys_container', 'GEMINI_API_KEY', rawGemini);
+
+    const rawOpenai = {{ cfg('OPENAI_API_KEY', '[]') | tojson }};
+    populateKeys('openai_keys_container', 'OPENAI_API_KEY', rawOpenai);
+  });
+
+  function populateKeys(containerId, inputName, rawVal) {
+    try {
+      const parsed = JSON.parse(rawVal);
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) {
+          addKeyField(containerId, inputName);
+        } else {
+          parsed.forEach(k => addKeyField(containerId, inputName, k));
+        }
+        return;
+      }
+    } catch (e) {}
+
+    // Fallback if not JSON array
+    if (rawVal && rawVal !== '[]' && rawVal !== '') {
+      if (rawVal.includes(",")) {
+        rawVal.split(",").forEach(k => addKeyField(containerId, inputName, k.trim()));
+      } else {
+        addKeyField(containerId, inputName, rawVal);
+      }
+    } else {
+      addKeyField(containerId, inputName);
+    }
+  }
+
+  // Update Bot Profile Profile Changer AJAX
+  const saveProfileBtn = document.getElementById("save_profile_btn");
+  saveProfileBtn.addEventListener("click", async () => {
+    const form = document.getElementById("bot_profile_form");
+    const formData = new FormData(form);
+    
+    const botType = document.getElementById("profile_bot_type").value;
+    const username = document.getElementById("profile_username").value.trim();
+    const avatarInput = document.getElementById("profile_avatar");
+    
+    if (!username && (!avatarInput.files || avatarInput.files.length === 0)) {
+      return showToast("⚠️ Fill in a new username or select an avatar file first!", "danger");
+    }
+
+    saveProfileBtn.disabled = true;
+    saveProfileBtn.innerText = "Updating... ⏳";
+
+    try {
+      const r = await fetch("/ai_resident/api/bot/profile", {
+        method: "POST",
+        body: formData
+      });
+      const data = await r.json();
+      if (data.ok) {
+        showToast("✅ Bot profile changed successfully in Discord!", "success");
+        document.getElementById("profile_username").value = "";
+        avatarInput.value = "";
+      } else {
+        showToast(`❌ Profile update failed: ${data.error}`, "danger");
+      }
+    } catch (e) {
+      showToast("❌ Network / connection error occurred", "danger");
+    } finally {
+      saveProfileBtn.disabled = false;
+      saveProfileBtn.innerHTML = "Apply Profile Update 🎨";
+    }
+  });
+
+  // Toast notifier
+  function showToast(msg, type) {
+    const container = document.getElementById("toast-container");
+    if (!container) return alert(msg);
+    const toast = document.createElement("div");
+    toast.className = `alert alert-${type}`;
+    toast.style.padding = "12px 24px";
+    toast.style.borderRadius = "8px";
+    toast.style.background = type === "success" ? "rgba(16, 185, 129, 0.9)" : "rgba(239, 68, 68, 0.9)";
+    toast.style.color = "white";
+    toast.style.fontSize = "13px";
+    toast.style.fontWeight = "600";
+    toast.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+    toast.innerText = msg;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+  }
+</script>
+{% endblock %}

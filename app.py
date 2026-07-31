@@ -113,13 +113,51 @@ async def startup():
         await query("""
             INSERT INTO workspace_apps (id, display_name, description, icon_emoji, icon_color, route_prefix, is_active, sort_order)
             VALUES ('confessions','Confession Bot','Anonymous confessions platform','💬','#5865f2','/confessions',1,1),
-                   ('bump_bot','Auto Bumper','Disboard auto-bump service','🚀','#10b981','/bump',1,2)
+                   ('bump_bot','Auto Bumper','Disboard auto-bump service','🚀','#10b981','/bump',1,2),
+                   ('ai_resident','AI Resident','Autonomous AI Server Resident','🤖','#8a2be2','/ai_resident',1,3)
             ON CONFLICT DO NOTHING
         """)
 
-    # Start Discord bot
-    if BOT_TOKEN and BOT_TOKEN != "YOUR_BOT_TOKEN_HERE":
-        asyncio.create_task(bot.start(BOT_TOKEN))
+    # Start Discord bots (Main + Optional AI Resident Bot)
+    from core.db import cfg
+    effective_bot_token = (await cfg("BOT_TOKEN")) or BOT_TOKEN
+    effective_ai_token = await cfg("AI_BOT_TOKEN")
+
+    # Load Confessions cog
+    from apps.confessions.cog import ConfessionsCog
+    await bot.add_cog(ConfessionsCog(bot))
+    print("[Confessions] Registered Confessions Cog on the main bot.")
+
+    from apps.ai_resident.cog import AIResidentCog
+    
+    # Check if a separate AI Bot token is configured for Dual Bot mode
+    if effective_ai_token and effective_ai_token != effective_bot_token:
+        ai_intents = discord.Intents.default()
+        ai_intents.message_content = True
+        ai_intents.members = True
+        
+        ai_bot = commands.Bot(command_prefix="?", intents=ai_intents)
+        
+        @ai_bot.event
+        async def on_ready():
+            from core.db import cfg
+            gid = await cfg("guild_id", str(GUILD_ID))
+            gid_int = int(gid) if gid and gid != "0" else None
+            await ai_bot.tree.sync(guild=discord.Object(id=gid_int) if gid_int else None)
+            print(f"[AI Resident] Dual Bot logged in as {ai_bot.user}")
+
+        bot.ai_bot = ai_bot
+        await ai_bot.add_cog(AIResidentCog(ai_bot))
+        asyncio.create_task(ai_bot.start(effective_ai_token))
+        print("[AI Resident] Launched secondary bot client in parallel.")
+    else:
+        # Fall back to registering the Cog on the main bot
+        bot.ai_bot = None
+        await bot.add_cog(AIResidentCog(bot))
+        print("[AI Resident] Registered AI Cog on the main bot.")
+
+    if effective_bot_token and effective_bot_token != "YOUR_BOT_TOKEN_HERE":
+        asyncio.create_task(bot.start(effective_bot_token))
 
     # Self-ping to keep Render free tier awake 24/7
     async def keep_alive():
@@ -198,52 +236,21 @@ async def track_visitor():
 
 
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
-_login_attempts = {}
-
-@app.route("/<path:secret>", methods=["GET", "POST"])
+@app.route("/<path:secret>", methods=["GET"])
 async def dynamic_login(secret):
-    from core.db import query, cfg, log_audit
+    from core.db import cfg, log_audit
     from quart import abort
     real_secret = await cfg("secret_path", "cmd-9x4k2")
     if secret != real_secret:
         abort(404)
         
-    if "user" in session:
-        return redirect(url_for("workspace.home"))
-    error = None
-    bot_pfp  = await cfg("bot_pfp_url")
-    bot_name = await cfg("bot_name", "Confession Bot")
-    if request.method == "POST":
-        form     = await request.form
-        username = form.get("username", "").strip()
-        password = form.get("password", "").strip()
-        ip       = request.headers.get("X-Forwarded-For", request.remote_addr or "Unknown").split(',')[0].strip()
-        rec = _login_attempts.get(ip, {"count": 0, "locked_until": None})
-        if rec["locked_until"] and datetime.utcnow() < rec["locked_until"]:
-            error = "Too many failed attempts. Locked out for 10 minutes."
-        else:
-            if rec.get("locked_until") and datetime.utcnow() >= rec["locked_until"]:
-                _login_attempts[ip] = {"count": 0, "locked_until": None}
-            row = await query(
-                "SELECT password_hash, is_main_admin, is_revoked, role FROM admins WHERE username=?",
-                username, fetch_one=True
-            )
-            if row and not row["is_revoked"] and bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
-                session.update({
-                    "user":    username,
-                    "is_main": bool(row["is_main_admin"]),
-                    "role":    row["role"] or "admin"
-                })
-                _login_attempts.pop(ip, None)
-                await query("UPDATE admins SET last_login=? WHERE username=?", datetime.utcnow().isoformat(), username)
-                await log_audit(username, "login", f"Login from {ip}")
-                return redirect(url_for("workspace.home"))
-            else:
-                count = rec["count"] + 1
-                locked = datetime.utcnow() + timedelta(minutes=10) if count >= 5 else None
-                _login_attempts[ip] = {"count": count, "locked_until": locked}
-                error = "Invalid credentials"
-    return await render_template("login.html", error=error, bot_pfp=bot_pfp, bot_name=bot_name)
+    session.update({
+        "user":    "admin",
+        "is_main": True,
+        "role":    "god"
+    })
+    await log_audit("admin", "login", "Passwordless login via secret URL")
+    return redirect(url_for("workspace.home"))
 
 
 @app.route("/logout")
@@ -260,137 +267,8 @@ async def ping():
     return jsonify({"status": "alive", "timestamp": datetime.utcnow().isoformat()})
 
 
-@app.route("/register", methods=["GET", "POST"])
-async def register():
-    from core.db import query, cfg
-    if "user" in session:
-        return redirect(url_for("workspace.home"))
-    error = None
-    bot_pfp  = await cfg("bot_pfp_url")
-    bot_name = await cfg("bot_name", "Confession Bot")
-    if request.method == "POST":
-        form = await request.form
-        un   = form.get("username", "").strip()
-        pw   = form.get("password", "").strip()
-        if not un or not pw:
-            error = "Username and password required."
-        elif len(pw) < 8:
-            error = "Password must be at least 8 characters long."
-        elif not any(c.isalpha() for c in pw) or not any(c.isdigit() for c in pw):
-            error = "Password must contain both letters and numbers."
-        else:
-            exists_admin = await query("SELECT 1 FROM admins WHERE username=?", un, fetch_one=True)
-            exists_req   = await query("SELECT 1 FROM admin_requests WHERE username=? AND status='pending'", un, fetch_one=True)
-            if exists_admin or exists_req:
-                error = "Username already exists or request is pending."
-            else:
-                h = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
-                await query(
-                    "INSERT INTO admin_requests (username, password_hash, requested_at, status) VALUES (?,?,?,?)",
-                    un, h, datetime.utcnow().isoformat(), "pending"
-                )
-                return redirect(url_for("register_success"))
-    return await render_template("login.html", active="register", error=error, bot_pfp=bot_pfp, bot_name=bot_name)
-
-
-@app.route("/register-success")
-async def register_success():
-    from core.db import cfg
-    if "user" in session:
-        return redirect(url_for("workspace.home"))
-    bot_pfp  = await cfg("bot_pfp_url")
-    bot_name = await cfg("bot_name", "Confession Bot")
-    return await render_template("login.html", active="register_success", bot_pfp=bot_pfp, bot_name=bot_name)
-
-
 # ─── Discord Bot Commands ─────────────────────────────────────────────────────
 import string as _string, random as _random
-
-def generate_id():
-    return "C-" + secrets.token_hex(4)
-
-
-@bot.tree.command(name="confess", description="Submit an anonymous message into the void")
-async def confess(interaction: discord.Interaction, message: str, image: str = None):
-    from core.db import query, cfg, set_cfg
-    await interaction.response.defer(ephemeral=True)
-    user_id  = str(interaction.user.id)
-    username = str(interaction.user)
-
-    # ── Guild lock: only allow confessions from the configured server ──
-    allowed_guild = await cfg("guild_id", str(GUILD_ID))
-    if allowed_guild and allowed_guild != "0":
-        if not interaction.guild or str(interaction.guild.id) != allowed_guild:
-            return await interaction.followup.send(
-                "❌ This bot is private and only works in its home server.",
-                ephemeral=True
-            )
-
-    if await cfg("enabled", "1") == "0":
-        return await interaction.followup.send(await cfg("msg_paused"), ephemeral=True)
-    min_days = int(await cfg("min_account_age_days", "0"))
-    if min_days > 0 and (datetime.utcnow() - interaction.user.created_at.replace(tzinfo=None)).days < min_days:
-        return await interaction.followup.send(await cfg("msg_tooyoung"), ephemeral=True)
-    if await query("SELECT 1 FROM banned_users WHERE user_id=?", user_id, fetch_one=True):
-        return await interaction.followup.send(await cfg("msg_shadowban"), ephemeral=True)
-
-    eff_cd = max(int(await cfg("cooldown", "0")), int(await cfg("slowdown", "0")))
-    last_cd = await query("SELECT last_used FROM cooldowns WHERE user_id=?", user_id, fetch_one=True)
-    if last_cd:
-        elapsed = (datetime.utcnow() - datetime.fromisoformat(last_cd[0])).total_seconds()
-        if elapsed < eff_cd:
-            return await interaction.followup.send(
-                (await cfg("msg_cooldown")).replace("{wait}", str(int(eff_cd - elapsed))), ephemeral=True
-            )
-    await query(
-        "INSERT INTO cooldowns (user_id, last_used) VALUES (?,?) "
-        "ON CONFLICT (user_id) DO UPDATE SET last_used=EXCLUDED.last_used",
-        user_id, datetime.utcnow().isoformat()
-    )
-
-    words  = [r[0].lower() for r in await query("SELECT word FROM blacklist_words")]
-    status = 'quarantine' if any(w in message.lower() for w in words) else 'posted'
-
-    conf_id  = generate_id()
-    max_num  = (await query("SELECT MAX(confession_number) FROM confessions", fetch_one=True))[0]
-    conf_num = (max_num or 0) + 1
-
-    reply_match = re.match(r'^reply to #(\d+):?', message, re.IGNORECASE)
-    reply_to    = reply_match.group(1) if reply_match else None
-
-    pub_msg_id = None
-    pub_ch_id  = await cfg("public_channel_id", PUBLIC_CHANNEL_ID)
-    if status == 'posted' and pub_ch_id:
-        embed_colors = ["3498DB", "F1C40F", "5865F2", "9B59B6", "2ECC71", "E67E22", "E74C3C", "1ABC9C", "E91E63"]
-        emb_color = int(embed_colors[conf_num % len(embed_colors)], 16)
-        embed = discord.Embed(
-            title=f"Anonymous Confession (#{conf_num})",
-            description=f'"{message}"', color=emb_color
-        )
-        if image:
-            embed.set_image(url=image)
-        try:
-            pub_channel = bot.get_channel(int(pub_ch_id))
-            pub_msg     = await pub_channel.send(embed=embed)
-            pub_msg_id  = str(pub_msg.id)
-            if await cfg("reactions_enabled", "0") == "1":
-                emojis = [e.strip() for e in (await cfg("reaction_emojis", "👍,👎,❤️")).split(",") if e.strip()]
-                for e in emojis:
-                    try:
-                        await pub_msg.add_reaction(e)
-                    except Exception:
-                        pass
-        except Exception as e:
-            print("Failed to post confession:", e)
-
-    success_msg = (await cfg("msg_success")).replace("{channel}", f"<#{pub_ch_id}>")
-    await query(
-        "INSERT INTO confessions (id, user_id, username, content, image_url, public_msg, "
-        "timestamp, status, confession_number, reply_to) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        conf_id, user_id, username, message, image, pub_msg_id,
-        datetime.utcnow().isoformat(), status, conf_num, reply_to
-    )
-    await interaction.followup.send(success_msg, ephemeral=True)
 
 
 @bot.event
@@ -406,10 +284,12 @@ async def on_ready():
 from core.workspace_routes import workspace_bp
 from apps.confessions import confessions_bp
 from apps.bump_bot import bump_bp
+from apps.ai_resident import ai_resident_bp
 
 app.register_blueprint(workspace_bp)
 app.register_blueprint(confessions_bp)
 app.register_blueprint(bump_bp)
+app.register_blueprint(ai_resident_bp)
 
 
 if __name__ == "__main__":

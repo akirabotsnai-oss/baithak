@@ -1,0 +1,99 @@
+{% extends "shell.html" %}
+{% block title %}AI Resident — Server Selection{% endblock %}
+{% block page_title %}AI Server Resident 🤖{% endblock %}
+
+{% block sidebar_nav %}
+<a href="/ai_resident/" class="nav-item active">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+  Server Select
+</a>
+{% if is_main %}
+<a href="/ai_resident/admin/env" class="nav-item">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+  Global Keys Editor
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if setup_mode %}
+<div class="widget genz-card" style="max-width: 650px; margin: 40px auto; padding: 32px;">
+  <div style="font-size: 48px; margin-bottom: 20px; text-align: center;">⚙️</div>
+  <h2 style="font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 16px;">Configure Discord Credentials</h2>
+  <p class="text-muted" style="text-align: center; margin-bottom: 24px; font-size: 14px;">
+    To customize servers, you must configure your Discord Developer Client Credentials. This handles user authorization and loads settings securely.
+  </p>
+  
+  <div style="background: rgba(0,0,0,0.2); border-radius: 12px; padding: 20px; border: 1px solid var(--border-light); margin-bottom: 24px;">
+    <h4 style="font-weight: 700; margin-bottom: 12px;">Steps to Setup:</h4>
+    <ol class="text-muted" style="font-size: 13px; padding-left: 20px; line-height: 1.8;">
+      <li>Go to the <a href="https://discord.com/developers/applications" target="_blank" style="color: var(--accent); font-weight:600;">Discord Developer Portal</a>.</li>
+      <li>Open your Discord Application client.</li>
+      <li>Copy the <b>Client ID</b> and <b>Client Secret</b> (found under OAuth2).</li>
+      <li>Go to the <a href="/ai_resident/admin/env" style="color: var(--accent); font-weight:600;">Global Keys Editor</a> page (God Mode only) and input them.</li>
+      <li>Set Redirect URI to: <code>http://your-ip:port/ai_resident/oauth/callback</code> (or localhost).</li>
+    </ol>
+  </div>
+  
+  {% if is_main %}
+  <div style="text-align: center;">
+    <a href="/ai_resident/admin/env" class="btn btn-primary" style="border-radius: 99px; text-transform: uppercase; font-size: 12px;">Go to Keys Editor 🚀</a>
+  </div>
+  {% else %}
+  <div class="alert alert-warning" style="text-align: center; font-size:12px; border-radius: 8px;">
+    ⚠️ Please contact your primary workspace admin (Byte) to input the Client credentials.
+  </div>
+  {% endif %}
+</div>
+
+{% else %}
+
+<div class="genz-header">
+  <h1 class="genz-title">Select your <span class="genz-highlight">Discord Server</span> 🤖</h1>
+  <p class="text-muted" style="font-size: 15px;">Launch the configuration control room for active servers where you have Manage Server rights.</p>
+</div>
+
+<div class="grid-3" style="margin-top: 32px;">
+  {% if guilds %}
+    {% for guild in guilds %}
+    <div class="widget genz-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 200px;">
+      <div>
+        <div style="display:flex; align-items:center; margin-bottom:16px;">
+          {% if guild.icon %}
+          <img src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.png" style="width: 48px; height: 48px; border-radius: 50%; margin-right: 16px; border: 2px solid var(--accent);" alt="icon">
+          {% else %}
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--border-light); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--text-muted); margin-right: 16px; border: 2px dashed var(--text-muted);">
+            {{ guild.name[:2].upper() }}
+          </div>
+          {% endif %}
+          
+          <div style="overflow: hidden;">
+            <h4 style="font-weight: 800; font-size: 16px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ guild.name }}</h4>
+            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Server ID: {{ guild.id }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: auto;">
+        {% if guild.is_bot_present %}
+        <span class="badge badge-success" style="font-size: 10px; padding: 4px 10px; border-radius: 99px;">Bot Online</span>
+        <a href="/ai_resident/guild/{{ guild.id }}" class="btn btn-primary" style="font-size: 11px; padding: 6px 14px; text-decoration: none; border-radius: 99px;">Manage AI ⚙️</a>
+        {% else %}
+        <span class="badge badge-danger" style="font-size: 10px; padding: 4px 10px; border-radius: 99px; background: rgba(239, 68, 68, 0.2); color: #f87171;">Bot Offline</span>
+        <a href="https://discord.com/api/oauth2/authorize?client_id={{ cfg('DISCORD_CLIENT_ID') }}&permissions=8&scope=bot%20applications.commands" target="_blank" class="btn btn-secondary" style="font-size: 11px; padding: 6px 14px; text-decoration: none; border-radius: 99px;">Invite Bot 📥</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="widget" style="grid-column: 1 / -1; text-align: center; padding: 64px;">
+      <div style="font-size: 64px;">🫠</div>
+      <h3 style="font-size: 20px; font-weight: 800; margin-top: 16px;">No Servers Found</h3>
+      <p class="text-muted text-sm" style="max-width: 400px; margin: 8px auto;">
+        You don't own or manage any servers on Discord with the logged-in account, or your server list could not be loaded.
+      </p>
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

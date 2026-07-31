@@ -174,6 +174,51 @@ INSERT INTO app_permissions (app_id, role, permission) VALUES
     ('bump_bot',    'admin',     'configure_bump'),
     ('bump_bot',    'admin',     'app_settings')
 ON CONFLICT DO NOTHING;
+
+-- ─── AI Resident Tables ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ai_resident_guild_config (
+    guild_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT,
+    PRIMARY KEY (guild_id, key)
+);
+
+CREATE TABLE IF NOT EXISTS ai_resident_memories (
+    id SERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    fact TEXT NOT NULL,
+    vector_embedding TEXT, -- Serialized JSON array of floats
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_resident_opt_out (
+    user_id TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS ai_resident_style_notes (
+    guild_id TEXT PRIMARY KEY,
+    slang_words TEXT,
+    accent_notes TEXT,
+    last_updated TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_resident_stats (
+    guild_id TEXT PRIMARY KEY,
+    messages_seen INTEGER DEFAULT 0,
+    replies_sent INTEGER DEFAULT 0
+);
+
+INSERT INTO workspace_apps (id, display_name, description, icon_emoji, icon_color, route_prefix, is_active, sort_order) VALUES
+    ('ai_resident', 'AI Resident', 'Autonomous AI Server Resident', '🤖', '#8a2be2', '/ai_resident', 1, 3)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO app_permissions (app_id, role, permission) VALUES
+    ('ai_resident', 'viewer',    'view_stats'),
+    ('ai_resident', 'admin',     'view_stats'),
+    ('ai_resident', 'admin',     'configure_ai'),
+    ('ai_resident', 'admin',     'app_settings')
+ON CONFLICT DO NOTHING;
 """
 
 def is_postgres():

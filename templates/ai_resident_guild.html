@@ -1,0 +1,270 @@
+{% extends "shell.html" %}
+{% block title %}AI Resident Settings — {{ guild_name }}{% endblock %}
+{% block page_title %}{{ guild_name }} AI Config ⚙️{% endblock %}
+
+{% block sidebar_nav %}
+<a href="/ai_resident/" class="nav-item">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+  Server Select
+</a>
+{% if is_main %}
+<a href="/ai_resident/admin/env" class="nav-item">
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+  Global Keys Editor
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Active Banner / Overview -->
+<div style="background: linear-gradient(135deg, var(--accent) 0%, rgba(138, 43, 226, 0.4) 100%); border-radius: 16px; padding: 24px; color: white; display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);">
+  <div>
+    <div style="display:flex; align-items:center;">
+      {% if guild_icon %}
+      <img src="https://cdn.discordapp.com/icons/{{ guild_id }}/{{ guild_icon }}.png" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 16px; border:2px solid white;" alt="icon">
+      {% endif %}
+      <div>
+        <h2 style="font-weight: 800; font-size: 24px; margin: 0;">{{ guild_name }} Control Panel</h2>
+        <p style="font-size: 13px; opacity: 0.9; margin: 4px 0 0 0;">Manage your server's autonomous AI resident agent.</p>
+      </div>
+    </div>
+  </div>
+  
+  <div>
+    <div class="form-check form-switch" style="font-size: 18px; font-weight: 700; display:flex; align-items:center; gap:10px;">
+      <label for="ai_active_toggle" style="cursor:pointer;">Active Status</label>
+      <input class="form-check-input" type="checkbox" id="ai_active_toggle" {% if guild_cfg('active', '1') == '1' %}checked{% endif %} style="transform: scale(1.3); cursor:pointer;">
+    </div>
+  </div>
+</div>
+
+<!-- Config Form Elements -->
+<div class="grid-2">
+  <!-- General Personality settings -->
+  <div class="widget genz-card">
+    <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 20px; display:flex; align-items:center; gap:8px;">
+      🎭 Personality & Dialect
+    </h3>
+    
+    <div style="margin-bottom: 20px;">
+      <label style="display:block; font-size: 12px; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">Active Persona Preset</label>
+      <select id="personality_preset" class="form-control" style="width: 100%; padding:10px; border-radius: 8px; background: rgba(0,0,0,0.3); color:var(--text-color); border: 1px solid var(--border-light);">
+        <option value="Roast Hyderabadi" {% if guild_cfg('personality', 'Roast Hyderabadi') == 'Roast Hyderabadi' %}selected{% endif %}>Roast Hyderabadi (Default Savage/Hinglish)</option>
+        <option value="Friendly Hype" {% if guild_cfg('personality', 'Friendly Hype') == 'Friendly Hype' %}selected{% endif %}>Friendly Hype (Supportive/Indian Slang)</option>
+        <option value="Sarcastic Intellectual" {% if guild_cfg('personality', 'Sarcastic Intellectual') == 'Sarcastic Intellectual' %}selected{% endif %}>Sarcastic Intellectual (Dry/High-Vocab)</option>
+        <option value="Helpful Professor" {% if guild_cfg('personality', 'Helpful Professor') == 'Helpful Professor' %}selected{% endif %}>Helpful Professor (SFW/Clean Q&A)</option>
+        <option value="custom" {% if guild_cfg('personality') == 'custom' %}selected{% endif %}>Custom Prompts Override</option>
+      </select>
+    </div>
+    
+    <div id="custom_prompt_container" style="display: {% if guild_cfg('personality') == 'custom' %}block{% else %}none{% endif %}; margin-bottom: 20px;">
+      <label style="display:block; font-size: 12px; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">Custom System Instructions</label>
+      <textarea id="custom_prompt" class="form-control" rows="5" placeholder="Define custom behavior, rules, and dialetct..." style="width:100%; border-radius:8px; padding:10px; background:rgba(0,0,0,0.3); color:var(--text-color); border:1px solid var(--border-light);">{{ guild_cfg('custom_prompt', '') }}</textarea>
+    </div>
+    
+    <div style="border-top:1px solid var(--border-light); padding-top:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-weight:700; font-size:14px;">Vector Memory Sync</span>
+        <input class="form-check-input" type="checkbox" id="memory_toggle" {% if guild_cfg('memory_enabled', '1') == '1' %}checked{% endif %}>
+      </div>
+      <p class="text-muted" style="font-size:11px; margin:0;">When enabled, the bot extracts long-term facts (likes, interests) about users in real-time and recalls them when they speak.</p>
+    </div>
+  </div>
+
+  <!-- Response tuning slider -->
+  <div class="widget genz-card">
+    <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 20px; display:flex; align-items:center; gap:8px;">
+      ⚡ Chat Response Tuning
+    </h3>
+    
+    <div style="margin-bottom: 24px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <label style="font-size: 12px; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Ambient Response Chance</label>
+        <span id="reply_chance_val" style="font-weight: 700; color:var(--accent);">{{ guild_cfg('reply_chance', '4') }}%</span>
+      </div>
+      <input type="range" class="form-range" id="reply_chance" min="0" max="100" value="{{ guild_cfg('reply_chance', '4') }}" style="width:100%;">
+      <span class="text-muted" style="font-size: 11px;">Probability of bot randomly responding to normal chat messages (default is ~4%). Bot always responds to direct @mentions.</span>
+    </div>
+    
+    <div style="margin-bottom: 24px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <label style="font-size: 12px; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Reply Cooldown (Seconds)</label>
+        <span id="cooldown_val" style="font-weight: 700; color:var(--accent);">{{ guild_cfg('cooldown', '5') }}s</span>
+      </div>
+      <input type="range" class="form-range" id="cooldown" min="0" max="60" value="{{ guild_cfg('cooldown', '5') }}" style="width:100%;">
+      <span class="text-muted" style="font-size: 11px;">Minimum seconds between back-to-back channel replies to prevent spamming.</span>
+    </div>
+
+    <div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <label style="font-size: 12px; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Inactivity Nudge Timeout</label>
+        <select id="nudge_hours" class="form-control" style="width: 100%; padding:10px; border-radius: 8px; background: rgba(0,0,0,0.3); color:var(--text-color); border: 1px solid var(--border-light);">
+          <option value="3" {% if guild_cfg('inactivity_nudge_hours') == '3' %}selected{% endif %}>3 Hours</option>
+          <option value="6" {% if guild_cfg('inactivity_nudge_hours') == '6' %}selected{% endif %}>6 Hours</option>
+          <option value="12" {% if guild_cfg('inactivity_nudge_hours', '12') == '12' %}selected{% endif %}>12 Hours (Default)</option>
+          <option value="24" {% if guild_cfg('inactivity_nudge_hours') == '24' %}selected{% endif %}>24 Hours</option>
+          <option value="9999" {% if guild_cfg('inactivity_nudge_hours') == '9999' %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+      <span class="text-muted" style="font-size: 11px;">Triggers an active prompt (e.g. <i>"kaha margaye?"</i>) if no message is received in active channels for X hours.</span>
+    </div>
+  </div>
+</div>
+
+<div class="grid-3" style="margin-top: 32px;">
+  <!-- Channels checklist -->
+  <div class="widget genz-card" style="grid-column: 1 / 3;">
+    <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 20px;">🔒 Active Channel Limits</h3>
+    <p class="text-muted" style="font-size: 12px; margin-bottom:16px;">Select which channels the AI resident can post in. If none are checked, it will listen to all channels it has access to.</p>
+    
+    <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-light); border-radius: 8px; padding: 12px; background: rgba(0,0,0,0.2);">
+      {% if channels %}
+        {% for ch in channels %}
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <input type="checkbox" class="channel-check" id="ch_{{ ch.id }}" value="{{ ch.id }}" 
+                 {% if ch.id in guild_cfg('active_channels', '') %}checked{% endif %}>
+          <label for="ch_{{ ch.id }}" style="font-size:13px; font-weight:600; cursor:pointer;"># {{ ch.name }}</label>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted" style="font-size: 12px; text-align:center; padding: 16px;">Active channels list could not be loaded. Please ensure the bot is fully set up in the server.</p>
+      {% endif %}
+    </div>
+
+    <!-- NSFW Warning -->
+    <div class="alert alert-warning" style="margin-top: 20px; font-size:11px; border-radius: 8px; background: rgba(241, 196, 15, 0.1); border: 1px solid rgba(241, 196, 15, 0.3); color: #f1c40f;">
+      ⚠️ <b>NSFW Channels reminder:</b> Since the roast personality preset includes casual cursing, you should configure whichever channels the bot is active in as <b>NSFW</b> in Discord channel settings to align with guidelines! (Change this in Discord, not via API).
+    </div>
+  </div>
+
+  <!-- Stats and style analytics -->
+  <div class="widget genz-card">
+    <h3 style="font-size: 18px; font-weight: 800; margin-bottom: 20px;">📊 Server AI Statistics</h3>
+    
+    <div style="display:flex; flex-direction:column; gap:16px; margin-bottom: 24px;">
+      <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
+        <span class="text-muted" style="font-size: 13px;">Messages Logged</span>
+        <span style="font-weight:700;">{{ stats.messages_seen or 0 }}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
+        <span class="text-muted" style="font-size: 13px;">Replies Generated</span>
+        <span style="font-weight:700;">{{ stats.replies_sent or 0 }}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span class="text-muted" style="font-size: 13px;">Daily QOTD status</span>
+        <span>
+          <input class="form-check-input" type="checkbox" id="daily_q_toggle" {% if guild_cfg('daily_q_enabled', '1') == '1' %}checked{% endif %}>
+        </span>
+      </div>
+    </div>
+    
+    <div style="border-top:1px solid var(--border-light); padding-top:16px; margin-top:16px;">
+      <h4 style="font-size:12px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">Learned Dialect Profile</h4>
+      {% if style_row %}
+      <div style="font-size:12px; font-style:italic;" class="text-muted">
+        <b>Accents:</b> {{ style_row.accent_notes or 'Analyzing...' }}<br>
+        <b style="display:inline-block; margin-top:8px;">Popular Slang:</b> {{ style_row.slang_words or 'Calculating vocabulary...' }}
+      </div>
+      {% else %}
+      <p class="text-muted" style="font-size:12px; font-style:italic;">No messages analyzed yet. The AI automatically adapts vocabulary and common server expressions when members talk.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Floating Action Button to Save -->
+<div style="position: fixed; bottom: 32px; right: 32px; z-index: 1000;">
+  <button id="save_settings_btn" class="btn btn-primary" style="padding: 14px 28px; border-radius: 99px; box-shadow: 0 4px 14px rgba(138, 43, 226, 0.4); font-weight:700; text-transform:uppercase; font-size: 12px; display:flex; align-items:center; gap:8px;">
+    Save Settings 💾
+  </button>
+</div>
+
+<!-- AJAX Scripts to Save -->
+<script>
+  // Range sliders UI updates
+  const replyChance = document.getElementById("reply_chance");
+  const replyChanceVal = document.getElementById("reply_chance_val");
+  replyChance.addEventListener("input", (e) => {
+    replyChanceVal.innerText = `${e.target.value}%`;
+  });
+
+  const cooldown = document.getElementById("cooldown");
+  const cooldownVal = document.getElementById("cooldown_val");
+  cooldown.addEventListener("input", (e) => {
+    cooldownVal.innerText = `${e.target.value}s`;
+  });
+
+  // Personality Custom Field container
+  const personalityPreset = document.getElementById("personality_preset");
+  const customPromptContainer = document.getElementById("custom_prompt_container");
+  personalityPreset.addEventListener("change", (e) => {
+    if (e.target.value === "custom") {
+      customPromptContainer.style.display = "block";
+    } else {
+      customPromptContainer.style.display = "none";
+    }
+  });
+
+  // Save Settings
+  const saveBtn = document.getElementById("save_settings_btn");
+  saveBtn.addEventListener("click", async () => {
+    saveBtn.disabled = true;
+    saveBtn.innerText = "Saving... ⏳";
+    
+    // Compile checklist values
+    const checkedChannels = Array.from(document.querySelectorAll(".channel-check:checked"))
+      .map(cb => cb.value)
+      .join(",");
+      
+    const payload = {
+      active: document.getElementById("ai_active_toggle").checked ? "1" : "0",
+      personality: personalityPreset.value,
+      custom_prompt: document.getElementById("custom_prompt").value,
+      memory_enabled: document.getElementById("memory_toggle").checked ? "1" : "0",
+      reply_chance: replyChance.value,
+      cooldown: cooldown.value,
+      inactivity_nudge_hours: document.getElementById("nudge_hours").value,
+      active_channels: checkedChannels,
+      daily_q_enabled: document.getElementById("daily_q_toggle").checked ? "1" : "0"
+    };
+    
+    try {
+      const response = await fetch("/ai_resident/api/guild/{{ guild_id }}/save", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (data.ok) {
+        // Trigger Toast (defined globally in shell)
+        showToast("✅ Settings updated successfully!", "success");
+      } else {
+        showToast(`❌ Update failed: ${data.error}`, "danger");
+      }
+    } catch (e) {
+      showToast("❌ Network / connection error occurred", "danger");
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = "Save Settings 💾";
+    }
+  });
+
+  // Basic Toast Notification Trigger fallback
+  function showToast(msg, type) {
+    const container = document.getElementById("toast-container");
+    if (!container) return alert(msg);
+    const toast = document.createElement("div");
+    toast.className = `alert alert-${type}`;
+    toast.style.padding = "12px 24px";
+    toast.style.borderRadius = "8px";
+    toast.style.background = type === "success" ? "rgba(16, 185, 129, 0.9)" : "rgba(239, 68, 68, 0.9)";
+    toast.style.color = "white";
+    toast.style.fontSize = "13px";
+    toast.style.fontWeight = "600";
+    toast.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+    toast.innerText = msg;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+  }
+</script>
+{% endblock %}

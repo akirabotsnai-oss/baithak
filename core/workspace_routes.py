@@ -25,8 +25,7 @@ workspace_bp = Blueprint("workspace", __name__, template_folder="../templates")
 @workspace_bp.route("/")
 async def home():
     if "user" not in session:
-        secret = await cfg("secret_path", "cmd-9x4k2")
-        return await render_template("landing.html", login_url=f"/{secret}")
+        return "Unauthorized. Access denied. Please use your secret URL.", 403
         
     role = current_role()
     user = session["user"]
