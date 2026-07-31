@@ -11,7 +11,7 @@ from core.db import cfg
 
 # Default models
 PROVIDER_DEFAULT_MODELS = {
-    "groq": "llama3-70b-8192",
+    "groq": "llama-3.3-70b-versatile",
     "gemini": "gemini-1.5-flash",
     "openai": "gpt-4o-mini"
 }
@@ -134,7 +134,7 @@ async def generate_response(
     Rotates keys automatically on 429 rate limit.
     """
     provider = await cfg("ai_resident_provider", "groq")
-    model = await cfg("ai_resident_model", PROVIDER_DEFAULT_MODELS.get(provider, "llama3-70b-8192"))
+    model = await cfg("ai_resident_model", PROVIDER_DEFAULT_MODELS.get(provider, "llama-3.3-70b-versatile"))
     
     keys = await get_api_keys(provider)
     if not keys:
