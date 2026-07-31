@@ -161,5 +161,5 @@ async def base_ctx() -> dict:
         req_count=req_count[0] if req_count else 0,
         embed_title=await cfg("embed_title", "Anonymous Confession"),
         embed_footer=await cfg("embed_footer", "Confession | React below!"),
-        cfg=lambda k, d="": config_dict.get(k, d) if config_dict.get(k) is not None else d,
+        cfg=lambda k, d="": config_dict.get(k) or os.environ.get(k) or os.environ.get(k.upper()) or d,
     )

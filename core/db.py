@@ -49,10 +49,14 @@ async def query(sql: str, *args, fetch_one: bool = False):
 
 
 async def cfg(key: str, default: str = "") -> str:
-    """Get a value from config_store."""
+    """Get a value from config_store, falling back to os.environ if empty/not found."""
     row = await query("SELECT value FROM config_store WHERE key=?", key, fetch_one=True)
-    if row:
+    if row and row["value"]:
         return str(row["value"])
+    import os
+    env_val = os.environ.get(key) or os.environ.get(key.upper())
+    if env_val:
+        return str(env_val)
     return default
 
 
