@@ -32,7 +32,7 @@ load_dotenv()
 app = Quart(__name__, template_folder='templates')
 app.secret_key = os.environ.get("FLASK_SECRET") or secrets.token_hex(32)
 app.config.update(
-    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
     PERMANENT_SESSION_LIFETIME=timedelta(hours=24)
