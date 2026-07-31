@@ -49,6 +49,8 @@ class AIResidentCog(commands.Cog):
             r"get.*free.*money", r"leak.*onlyfans", r"hack.*robux"
         ]
         self.tasks_started = False
+        # Per-guild message counter for rate-limiting LLM style analysis
+        self._learn_counter = defaultdict(int)
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -335,8 +337,16 @@ class AIResidentCog(commands.Cog):
         # Load learned guild style notes
         style_row = await query("SELECT slang_words, accent_notes FROM ai_resident_style_notes WHERE guild_id=?", guild_id, fetch_one=True)
         style_notes = ""
-        if style_row:
-            style_notes = f"Slang words popular here: {style_row['slang_words'] or 'none'}. Accent details: {style_row['accent_notes'] or 'none'}."
+        if style_row and (style_row["slang_words"] or style_row["accent_notes"]):
+            slang = style_row["slang_words"] or ""
+            notes = style_row["accent_notes"] or ""
+            style_notes = (
+                f"CRITICAL STYLE RULE — Mirror how THIS specific server talks:\n"
+                f"{notes}\n"
+                f"Common slang/words people use here: {slang}\n"
+                f"IMPORTANT: Do NOT sound like a generic AI. Talk exactly like these people talk. "
+                f"Use their slang, their abbreviations, their energy. Sound like a server member, not a chatbot."
+            )
 
         # Compile System Prompts
         system_instructions = custom_prompt if custom_prompt else None
@@ -417,34 +427,75 @@ class AIResidentCog(commands.Cog):
         return [{"role": m["role"], "content": m["content"]} for m in self.rolling_context[channel_id]]
 
     # ─── Memory & Accent Learning ──────────────────────────────────────────────
-    
+
     async def learn_accent(self, message: discord.Message):
-        """Analyzes messages and updates style slang words dynamically."""
-        # Simple extraction of interesting words (Hinglish/slang words that look casual)
-        text = message.content.lower()
-        words = re.findall(r"\b[a-z]{3,15}\b", text)
-        casual_slang_candidates = ["bhai", "yaar", "arre", " scene", "baigan", "nakko", "hallu", "lite", "potti", "hau", "kya re", "chal", "mast", "ekdum"]
-        
-        detected = [w for w in words if w in casual_slang_candidates]
-        if detected:
-            guild_id = str(message.guild.id)
-            row = await query("SELECT slang_words FROM ai_resident_style_notes WHERE guild_id=?", guild_id, fetch_one=True)
-            
-            existing = set()
-            if row and row["slang_words"]:
-                existing = set(w.strip() for w in row["slang_words"].split(",") if w.strip())
-            
-            existing.update(detected)
-            slang_str = ",".join(existing)
-            
-            # Simple accent description based on common words used
-            accent = "Hyderabadi / Hinglish blend using casual words like: " + ", ".join(list(existing)[:8])
-            
+        """Every 15 messages, uses LLM to analyze server vibe and update style notes."""
+        guild_id = str(message.guild.id)
+
+        # Collect any words typed into a rolling buffer
+        text = message.content.strip()
+        if not text or len(text) < 3:
+            return
+
+        self._learn_counter[guild_id] += 1
+
+        # Only do a deep LLM analysis every 15 messages to avoid wasting API calls
+        if self._learn_counter[guild_id] % 15 != 0:
+            return
+
+        # Grab the last 10 messages from the channel for style analysis
+        try:
+            msgs = []
+            async for m in message.channel.history(limit=15):
+                if not m.author.bot and m.content.strip():
+                    msgs.append(f"{m.author.display_name}: {m.content}")
+            if len(msgs) < 3:
+                return
+            sample = "\n".join(reversed(msgs[:10]))  # chronological order
+        except Exception:
+            return
+
+        analysis_prompt = (
+            f"Analyze the following Discord server chat messages and extract a concise style profile.\n"
+            f"Messages:\n{sample}\n\n"
+            f"Reply with ONLY a JSON object with these keys (no markdown, no explanation):\n"
+            f'{{"slang": [list of slang/casual words used], "tone": "one-line tone description", '
+            f'"language": "English/Hinglish/Hindi/mixed", "vibe": "one-line vibe like edgy/wholesome/chaotic etc", '
+            f'"example_style": "one example sentence in this server\'s style"}}'
+        )
+
+        try:
+            raw = await generate_response(
+                messages=[{"role": "user", "content": analysis_prompt}],
+                preset_name="Helpful Professor"
+            )
+            # Extract JSON even if wrapped in text
+            json_start = raw.find("{")
+            json_end = raw.rfind("}") + 1
+            if json_start == -1 or json_end == 0:
+                return
+            data = json.loads(raw[json_start:json_end])
+
+            slang_list = data.get("slang", [])
+            tone = data.get("tone", "casual")
+            language = data.get("language", "Hinglish")
+            vibe = data.get("vibe", "chill")
+            example = data.get("example_style", "")
+
+            slang_str = ", ".join(slang_list[:20]) if slang_list else ""
+            accent_notes = (
+                f"Tone: {tone}. Language: {language}. Vibe: {vibe}. "
+                f"Example of how people talk here: \"{example}\""
+            )
+
             await query(
                 "INSERT INTO ai_resident_style_notes (guild_id, slang_words, accent_notes, last_updated) VALUES (?,?,?,?) "
                 "ON CONFLICT (guild_id) DO UPDATE SET slang_words=EXCLUDED.slang_words, accent_notes=EXCLUDED.accent_notes, last_updated=EXCLUDED.last_updated",
-                guild_id, slang_str, accent, datetime.utcnow().isoformat()
+                guild_id, slang_str, accent_notes, datetime.utcnow().isoformat()
             )
+            print(f"[Style Learner] Updated style for guild {guild_id}: {vibe} / {language}")
+        except Exception as e:
+            print(f"[Style Learner] Failed: {e}")
 
     async def fetch_user_memories(self, guild_id, user_id, message_text: str) -> str:
         """Looks up existing memories about the user."""
