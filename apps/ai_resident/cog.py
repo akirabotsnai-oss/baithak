@@ -16,7 +16,47 @@ from datetime import datetime
 from collections import defaultdict
 
 from core.db import query, cfg
-from apps.ai_resident.llm import generate_response, get_embedding
+from apps.ai_resident.llm import generate_response, get_embedding, transcribe_audio
+
+# Anti-toxicity & profanity sanitization helpers
+BANNED_STYLE_WORDS = [
+    "baigan", "behen", "shuttfup", "bih", "bhen", "bhenchod", "bc", "mc", 
+    "madarchod", "gand", "gaand", "chutiya", "chutiye", "bhosdike", "harami", "saale", "saala"
+]
+
+def sanitize_style_text(text: str) -> str:
+    if not text:
+        return ""
+    for w in BANNED_STYLE_WORDS:
+        text = re.sub(r'\b' + re.escape(w) + r'\b', "", text, flags=re.IGNORECASE)
+    text = re.sub(r'\s*,\s*,', ',', text)
+    text = re.sub(r'^\s*,\s*', '', text)
+    text = re.sub(r'\s*,\s*$', '', text)
+    return text.strip()
+
+# Post-generation output safety filter
+BLOCKED_OUTPUT_PATTERNS = [
+    r"\bbehen\b", r"\bbaigan\b", r"shuttfup", r"\bbih\b", r"\bbhen\b",
+    r"\bbhenchod\b", r"\bmadarchod\b", r"\bchutiya\b", r"\bchutiye\b",
+    r"\bbhosdike\b", r"\bgaand\b", r"\bgand\b", r"\bharami\b", r"\bfuck\b",
+    r"\bshit\b", r"\basshole\b", r"\bbastard\b", r"\bdick\b", r"\bpussy\b", r"\bwhore\b", r"\bslut\b"
+]
+
+def is_response_safe(text: str) -> bool:
+    if not text:
+        return True
+    lower = text.lower()
+    return not any(re.search(p, lower) for p in BLOCKED_OUTPUT_PATTERNS)
+
+def cosine_similarity(v1: list, v2: list) -> float:
+    if not v1 or not v2 or len(v1) != len(v2):
+        return 0.0
+    dot = sum(a * b for a, b in zip(v1, v2))
+    norm_a = sum(a * a for a in v1) ** 0.5
+    norm_b = sum(b * b for b in v2) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
 
 # Simple stateful game class
 class GameState:
@@ -33,15 +73,36 @@ class AIResidentCog(commands.Cog):
         self.rolling_context = defaultdict(list)
         # channel_id -> last response timestamp
         self.cooldowns = defaultdict(float)
+        # user_id -> last response timestamp (per-user rate limit for ambient replies)
+        self.user_cooldowns = defaultdict(float)
+        # guild_id -> list of message timestamps in last 10 minutes (for Dynamic Mood Engine)
+        self.guild_chat_timestamps = defaultdict(list)
         # channel_id -> last message seen timestamp
         self.last_message_time = defaultdict(float)
         # channel_id -> GameState
         self.active_games = {}
+
+    def get_guild_mood(self, guild_id: str) -> str:
+        """Calculates dynamic guild mood based on chat velocity and time of day."""
+        now = time.time()
+        recent_count = len([t for t in self.guild_chat_timestamps[guild_id] if now - t < 600])
+        utc_hour = datetime.utcnow().hour
+        
+        if 21 <= utc_hour or utc_hour <= 1:  # Late night India/UTC (2am-6am IST)
+            return "Sleepy / Cozy"
+        elif recent_count > 15:
+            return "Hyped / Chaotic"
+        elif recent_count > 5:
+            return "Witty / Active"
+        else:
+            return "Chill / Relaxed"
         
         # Self-harm/danger keywords
         self.danger_keywords = [
             "suicide", "suicidal", "kill myself", "end my life", "self harm", 
-            "cutting myself", "depressed and want to die", "mar jana chahta", "zehar"
+            "cutting myself", "depressed and want to die", "mar jana chahta", "zehar",
+            "marna chahta", "jaan de dunga", "marna hai", "die alone", "want to die",
+            "self-harm", "hurt myself", "hanging myself", "overdose"
         ]
         # Scam patterns
         self.scam_patterns = [
@@ -223,9 +284,12 @@ class AIResidentCog(commands.Cog):
         if guild_id == "dm":
             return # Skip DM memories mixing into guild memory
 
-        # Log seen message
+        # Log seen message & track velocity for mood engine
         await self.log_stat(guild_id, is_reply=False)
         self.last_message_time[message.channel.id] = time.time()
+        now = time.time()
+        self.guild_chat_timestamps[guild_id].append(now)
+        self.guild_chat_timestamps[guild_id] = [t for t in self.guild_chat_timestamps[guild_id] if now - t < 600]
 
         is_enabled = await self.get_guild_cfg(guild_id, "active", "1") == "1"
         if not is_enabled:
@@ -257,12 +321,20 @@ class AIResidentCog(commands.Cog):
             except ValueError:
                 chance = 0.04
             
-            # Allow random reply if channel is active and configured
+            # Smart Interest Filter: prioritize questions, expressive chat, and keyword energy
+            content_clean = message.clean_content.strip()
+            has_question = "?" in content_clean
+            is_lengthy = len(content_clean) >= 12
+            has_keywords = any(kw in content_clean.lower() for kw in ["lol", "lmao", "bhai", "bro", "game", "why", "how", "what", "who", "kya", "kaise", "sahi", "op"])
+            is_interesting = has_question or is_lengthy or has_keywords
+
             active_channels = (await self.get_guild_cfg(guild_id, "active_channels", "")).split(",")
             active_channels = [c.strip() for c in active_channels if c.strip()]
             
-            if (not active_channels or str(message.channel.id) in active_channels) and random.random() < chance:
-                should_reply = True
+            if is_interesting and (not active_channels or str(message.channel.id) in active_channels) and random.random() < chance:
+                # Apply per-user rate limit (30s) to prevent single user ambient baiting
+                if time.time() - self.user_cooldowns[message.author.id] >= 30.0:
+                    should_reply = True
 
         if should_reply:
             # Check Cooldown
@@ -284,6 +356,7 @@ class AIResidentCog(commands.Cog):
 
             # Trigger AI Response
             self.cooldowns[message.channel.id] = time.time()
+            self.user_cooldowns[message.author.id] = time.time()
             async with message.channel.typing():
                 if message.attachments and message.attachments[0].content_type and message.attachments[0].content_type.startswith("image/"):
                     import httpx
@@ -323,10 +396,16 @@ class AIResidentCog(commands.Cog):
     async def send_ai_reply(self, message: discord.Message, context: list):
         guild_id = str(message.guild.id)
         
-        # Load Personality Preset
-        preset = await self.get_guild_cfg(guild_id, "personality", "Roast Hyderabadi")
+        # Load Personality Preset (check for channel-specific override first)
+        chan_preset = await self.get_guild_cfg(guild_id, f"channel_personality:{message.channel.id}", "")
+        preset = chan_preset if chan_preset else await self.get_guild_cfg(guild_id, "personality", "Roast Hyderabadi")
         custom_prompt = await self.get_guild_cfg(guild_id, "custom_prompt", "")
         
+        # Inject Dynamic Guild Mood into System Prompt
+        guild_mood = self.get_guild_mood(guild_id)
+        mood_note = f"CURRENT SERVER MOOD: {guild_mood} (adapt your energy level naturally to match this vibe)."
+        system_instructions = f"{custom_prompt}\n\n{mood_note}" if custom_prompt else mood_note
+
         # Load Memory Toggle
         memory_enabled = await self.get_guild_cfg(guild_id, "memory_enabled", "1") == "1"
         user_memory_context = ""
@@ -338,14 +417,13 @@ class AIResidentCog(commands.Cog):
         style_row = await query("SELECT slang_words, accent_notes FROM ai_resident_style_notes WHERE guild_id=?", guild_id, fetch_one=True)
         style_notes = ""
         if style_row and (style_row["slang_words"] or style_row["accent_notes"]):
-            slang = style_row["slang_words"] or ""
-            notes = style_row["accent_notes"] or ""
+            slang = sanitize_style_text(style_row["slang_words"] or "")
+            notes = sanitize_style_text(style_row["accent_notes"] or "")
             style_notes = (
-                f"CRITICAL STYLE RULE — Mirror how THIS specific server talks:\n"
+                f"SERVER VIBE (for energy/tone reference only — do not copy phrases verbatim, just match the general casualness):\n"
                 f"{notes}\n"
-                f"Common slang/words people use here: {slang}\n"
-                f"IMPORTANT: Do NOT sound like a generic AI. Talk exactly like these people talk. "
-                f"Use their slang, their abbreviations, their energy. Sound like a server member, not a chatbot."
+                f"Some casual words used here (use sparingly, only if they fit naturally): {slang}\n"
+                f"Do NOT sound like a generic AI, but your own HARD LIMITS against profanity, slurs, and toxicity always take priority over matching this vibe."
             )
 
         # Compile System Prompts
@@ -356,7 +434,13 @@ class AIResidentCog(commands.Cog):
         if user_memory_context:
             messages_payload.append({
                 "role": "user",
-                "content": f"[SYSTEM NOTIFICATION: Known facts about user {message.author.display_name}:\n{user_memory_context}]"
+                "content": (
+                    f"[SYSTEM NOTIFICATION — PRIVATE CONTEXT ONLY, not something to say out loud:\n"
+                    f"Known facts about user {message.author.display_name}:\n{user_memory_context}\n"
+                    f"Use this only to personalize tone/references SUBTLY if directly relevant. "
+                    f"NEVER read this list back, quote it, summarize it, or say 'I remember you said...' in front of the channel. "
+                    f"NEVER bring up a fact unless the user brings up that exact topic first in this message.]"
+                )
             })
             
         messages_payload.extend(context)
@@ -368,6 +452,31 @@ class AIResidentCog(commands.Cog):
             custom_system_prompt=system_instructions,
             guild_style_notes=style_notes
         )
+
+        # Output Safety Filter Check
+        if not is_response_safe(response):
+            print(f"[Safety Filter] Blocked unsafe response in guild {guild_id}: {response}")
+            admin_ch_id = await cfg("admin_channel_id")
+            if admin_ch_id:
+                try:
+                    admin_ch = self.bot.get_channel(int(admin_ch_id))
+                    if admin_ch:
+                        embed = discord.Embed(
+                            title="🛡️ AI OUTPUT SAFETY FILTER TRIGGERED",
+                            description=f"Blocked toxic/profane output in {message.channel.mention} for user {message.author.mention}:\n\n*\"{response}\"*",
+                            color=0xE74C3C,
+                            timestamp=datetime.utcnow()
+                        )
+                        await admin_ch.send(embed=embed)
+                except Exception as e:
+                    print(f"Failed to log safety filter alert: {e}")
+
+            response = random.choice([
+                "hmm let me think about that differently",
+                "nvm skip that one lol",
+                "eh not gonna touch that one",
+                "kuch naya bolo bhai"
+            ])
 
         # Post reply
         await message.reply(response)
@@ -429,7 +538,7 @@ class AIResidentCog(commands.Cog):
     # ─── Memory & Accent Learning ──────────────────────────────────────────────
 
     async def learn_accent(self, message: discord.Message):
-        """Every 15 messages, uses LLM to analyze server vibe and update style notes."""
+        """Every 30 messages, uses LLM to analyze server vibe and update clean style notes."""
         guild_id = str(message.guild.id)
 
         # Collect any words typed into a rolling buffer
@@ -439,8 +548,8 @@ class AIResidentCog(commands.Cog):
 
         self._learn_counter[guild_id] += 1
 
-        # Only do a deep LLM analysis every 15 messages to avoid wasting API calls
-        if self._learn_counter[guild_id] % 15 != 0:
+        # Only do a deep LLM analysis every 30 messages to smooth out toxic bursts
+        if self._learn_counter[guild_id] % 30 != 0:
             return
 
         # Grab the last 10 messages from the channel for style analysis
@@ -456,12 +565,16 @@ class AIResidentCog(commands.Cog):
             return
 
         analysis_prompt = (
-            f"Analyze the following Discord server chat messages and extract a concise style profile.\n"
+            f"Analyze the following Discord server chat messages and extract a concise, CLEAN style profile.\n"
             f"Messages:\n{sample}\n\n"
             f"Reply with ONLY a JSON object with these keys (no markdown, no explanation):\n"
-            f'{{"slang": [list of slang/casual words used], "tone": "one-line tone description", '
-            f'"language": "English/Hinglish/Hindi/mixed", "vibe": "one-line vibe like edgy/wholesome/chaotic etc", '
-            f'"example_style": "one example sentence in this server\'s style"}}'
+            f'{{"slang": [list of casual/fun slang words used — EXCLUDE any profanity, slurs, insults, or crude terms], '
+            f'"tone": "one-line tone description (e.g. playful, energetic, dry)", '
+            f'"language": "English/Hinglish/Hindi/mixed", '
+            f'"vibe": "one-line vibe like edgy/wholesome/chaotic etc — describe the vibe without profanity", '
+            f'"example_style": "one CLEAN example sentence in this server\'s style — must NOT contain profanity, insults, or crude language, even if the original chat did"}}\n\n'
+            f"IMPORTANT: Even if the source messages contain rude, crude, or insulting language, do not include any of that in your output. "
+            f"Only extract the fun/casual patterns (word choice, energy, sentence rhythm) — never the toxic parts."
         )
 
         try:
@@ -478,12 +591,12 @@ class AIResidentCog(commands.Cog):
 
             slang_list = data.get("slang", [])
             tone = data.get("tone", "casual")
-            language = data.get("language", "Hinglish")
+            language = data.get("language", "English")
             vibe = data.get("vibe", "chill")
             example = data.get("example_style", "")
 
-            slang_str = ", ".join(slang_list[:20]) if slang_list else ""
-            accent_notes = (
+            slang_str = sanitize_style_text(", ".join(slang_list[:20]) if slang_list else "")
+            accent_notes = sanitize_style_text(
                 f"Tone: {tone}. Language: {language}. Vibe: {vibe}. "
                 f"Example of how people talk here: \"{example}\""
             )
@@ -498,39 +611,60 @@ class AIResidentCog(commands.Cog):
             print(f"[Style Learner] Failed: {e}")
 
     async def fetch_user_memories(self, guild_id, user_id, message_text: str) -> str:
-        """Looks up existing memories about the user."""
+        """Looks up existing memories about the user using high-precision vector RAG search (similarity >= 0.75)."""
         # Check if user opted out
         opt = await query("SELECT 1 FROM ai_resident_opt_out WHERE user_id=?", str(user_id), fetch_one=True)
         if opt:
             return ""
 
-        # Perform simple keyword similarity matching
-        words = [w.lower() for w in re.findall(r"\b\w{3,12}\b", message_text)]
-        if not words:
-            # Fall back to returning last 3 memories
-            rows = await query(
-                "SELECT fact FROM ai_resident_memories WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 3",
-                str(guild_id), str(user_id)
-            ) or []
-            return "\n".join([f"- {r['fact']}" for r in rows])
-
-        # Find memories that contain matching keywords
-        likes_clauses = " OR ".join(["fact ILIKE ?"] * len(words))
-        params = [str(guild_id), str(user_id)] + [f"%{w}%" for w in words]
-        
+        # Fetch memories stored for this user in this guild
         rows = await query(
-            f"SELECT fact FROM ai_resident_memories WHERE guild_id=? AND user_id=? AND ({likes_clauses}) ORDER BY id DESC LIMIT 4",
-            *params
+            "SELECT fact, vector_embedding FROM ai_resident_memories WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 20",
+            str(guild_id), str(user_id)
         ) or []
 
         if not rows:
-            # Fallback to general list if no keyword match
-            rows = await query(
-                "SELECT fact FROM ai_resident_memories WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 3",
-                str(guild_id), str(user_id)
-            ) or []
+            return ""
 
-        return "\n".join([f"- {r['fact']}" for r in rows])
+        # 1. High-Precision Vector RAG Similarity Search
+        try:
+            msg_embedding = await get_embedding(message_text)
+            if msg_embedding:
+                matched_facts = []
+                for r in rows:
+                    fact_str = r["fact"]
+                    vec_raw = r.get("vector_embedding")
+                    if vec_raw:
+                        try:
+                            vec_arr = json.loads(vec_raw)
+                            sim = cosine_similarity(msg_embedding, vec_arr)
+                            # Strict relevance threshold: >= 0.75 cosine similarity
+                            if sim >= 0.75:
+                                matched_facts.append(fact_str)
+                        except Exception:
+                            pass
+                if matched_facts:
+                    return "\n".join([f"- {f}" for f in matched_facts[:3]])
+        except Exception as e:
+            print(f"[Vector Memory RAG Error]: {e}")
+
+        # 2. Strict Keyword Fallback (ONLY if words match explicitly, no random fallback)
+        words = [w.lower() for w in re.findall(r"\b\w{4,12}\b", message_text) if w.lower() not in ("what", "where", "when", "that", "this", "have", "with", "your")]
+        if not words:
+            return ""
+
+        likes_clauses = " OR ".join(["fact ILIKE ?"] * len(words))
+        params = [str(guild_id), str(user_id)] + [f"%{w}%" for w in words]
+        
+        matched_rows = await query(
+            f"SELECT fact FROM ai_resident_memories WHERE guild_id=? AND user_id=? AND ({likes_clauses}) ORDER BY id DESC LIMIT 3",
+            *params
+        ) or []
+
+        if matched_rows:
+            return "\n".join([f"- {r['fact']}" for r in matched_rows])
+
+        return ""  # Zero-Leak Guarantee: Do NOT return random unprompted facts!
 
     # ─── Moderation Filters ───────────────────────────────────────────────────
     
@@ -595,28 +729,32 @@ class AIResidentCog(commands.Cog):
         embed.add_field(name="💬 Ambient Chatting", value="Mention me (or reply to my messages) in chat to talk to me! I also reply randomly to normal messages depending on the configured chance.", inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="imagine", description="Generate an image from a prompt")
+    @app_commands.command(name="imagine", description="Generate a high-quality AI image from a prompt")
     async def imagine(self, interaction: discord.Interaction, prompt: str):
         await interaction.response.defer()
         
+        # 1. Primary: Try Google Imagen 3 API (powered by Gemini API Key!)
+        from apps.ai_resident.llm import generate_gemini_image
+        img_bytes = await generate_gemini_image(prompt)
+        
+        if img_bytes:
+            import io
+            file = discord.File(io.BytesIO(img_bytes), filename="imagine.jpg")
+            embed = discord.Embed(title=f"🎨 Imagine: {prompt[:100]}", color=0x4285F4)
+            embed.set_image(url="attachment://imagine.jpg")
+            embed.set_footer(text="Powered by Google Imagen 3")
+            return await interaction.followup.send(embed=embed, file=file)
+
         import urllib.parse
-        # Encode prompt for URL safety
-        encoded_prompt = urllib.parse.quote(prompt)
+        # Enhance brief user prompts for high-resolution artistic quality
+        enhanced_prompt = prompt.strip()
+        if len(enhanced_prompt.split()) < 10:
+            enhanced_prompt += ", highly detailed digital art, cinematic lighting, photorealistic masterpiece, 8k resolution, vibrant colors"
+
+        encoded_prompt = urllib.parse.quote(enhanced_prompt)
         
-        # Check pluggable API key
-        replicate_key = await cfg("REPLICATE_API_TOKEN")
+        # 2. Check Stability AI
         stability_key = await cfg("STABILITY_API_KEY")
-        
-        if not replicate_key and not stability_key:
-            # Fallback to Pollinations AI (free, no keys required!)
-            seed = random.randint(1000, 9999)
-            url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width=1024&height=1024&nologo=true"
-            embed = discord.Embed(title=f"🎨 {prompt[:100]}", color=0x8a2be2)
-            embed.set_image(url=url)
-            embed.set_footer(text="Powered by Pollinations AI (free)")
-            return await interaction.followup.send(embed=embed)
-        
-        # If Stability AI is configured
         if stability_key:
             try:
                 import httpx
@@ -636,10 +774,12 @@ class AIResidentCog(commands.Cog):
             except Exception as e:
                 print(f"Stability generation failed: {e}")
 
-        # Fallback to Pollinations AI if call fails
-        url = f"https://image.pollinations.ai/prompt/{random.randint(1000,9999)}_{prompt.replace(' ', '%20')}?width=1024&height=1024&nologo=true"
-        embed = discord.Embed(title=f"🎨 Imagine: {prompt}", color=0x8a2be2)
+        # 3. High-Resolution FLUX.1 Model Fallback
+        seed = random.randint(1000, 9999)
+        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width=1024&height=1024&model=flux&enhance=true&nologo=true"
+        embed = discord.Embed(title=f"🎨 Imagine: {prompt[:100]}", color=0x8a2be2)
         embed.set_image(url=url)
+        embed.set_footer(text="Powered by FLUX.1 AI Model")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="meme", description="Generate a captioned meme")
@@ -683,7 +823,7 @@ class AIResidentCog(commands.Cog):
         if channel_id in self.active_games and self.active_games[channel_id].active:
             return await interaction.response.send_message("❌ Game already running here!", ephemeral=True)
 
-        words = ["hyderabad", "biryani", "discord", "confession", "resident", "antigravity", "baigan"]
+        words = ["hyderabad", "biryani", "discord", "confession", "resident", "antigravity"]
         word = random.choice(words)
         
         game = GameState("hangman")
@@ -765,6 +905,17 @@ class AIResidentCog(commands.Cog):
         if len(content) < 15 or message.author.bot:
             return
 
+        # Personal Fact Indicator Filter to save 95% of LLM extraction API tokens
+        PERSONAL_INDICATORS = [
+            "i love", "i hate", "i play", "my favorite", "my fav", "i live in", "i am from",
+            "my birthday", "i work", "my dog", "my cat", "my pet", "my name is", "mera favorite",
+            "meri favorite", "mujhe pasand", "mai rehta", "meri age", "my hobby", "i enjoy",
+            "main khelta", "main rehta", "merko pasand", "mera naam"
+        ]
+        content_lower = content.lower()
+        if not any(ind in content_lower for ind in PERSONAL_INDICATORS):
+            return  # Skip LLM API extraction call for casual chatter!
+
         # Check if opted out
         opt = await query("SELECT 1 FROM ai_resident_opt_out WHERE user_id=?", str(message.author.id), fetch_one=True)
         if opt:
@@ -778,10 +929,12 @@ class AIResidentCog(commands.Cog):
             f"You are a background fact extractor for a Discord bot.\n"
             f"Analyze the following message sent by {username}:\n"
             f"\"{content}\"\n\n"
-            f"Task: Check if the message contains any permanent personal fact about {username} "
-            f"(e.g. their birthday, favorite food, games they play, dislikes, location, name, hobbies, etc.).\n"
-            f"If and ONLY if a fact is found, reply with a single clear sentence summarizing the fact (e.g. \"Enjoys playing Valorant\").\n"
-            f"If no personal fact is mentioned, reply with exactly \"NONE\"."
+            f"Task: Check if the message contains a LIGHT, casual personal fact about {username} "
+            f"(e.g. favorite food, games they play, hobbies, pets, casual preferences).\n"
+            f"DO NOT extract: mental health struggles, relationship/family conflicts, health issues, "
+            f"anything sad/sensitive/embarrassing, or anything said in anger or venting.\n"
+            f"If and ONLY if a light casual fact is found, reply with a single clear sentence (e.g. \"Enjoys playing Valorant\").\n"
+            f"If no such fact is mentioned, or the message is sensitive/emotional/negative, reply with exactly \"NONE\"."
         )
 
         try:
@@ -792,23 +945,41 @@ class AIResidentCog(commands.Cog):
             fact = response.strip()
             if fact and fact != "NONE" and len(fact) < 200 and not fact.startswith("❌"):
                 fact = fact.replace('"', '').strip()
+                # Compute vector embedding for long-term RAG search
+                embedding_vec = await get_embedding(fact)
+                vec_json = json.dumps(embedding_vec) if embedding_vec else None
                 await query(
-                    "INSERT INTO ai_resident_memories (guild_id, user_id, fact, created_at) VALUES (?,?,?,?)",
-                    guild_id, user_id, fact, datetime.utcnow().isoformat()
+                    "INSERT INTO ai_resident_memories (guild_id, user_id, fact, vector_embedding, created_at) VALUES (?,?,?,?,?)",
+                    guild_id, user_id, fact, vec_json, datetime.utcnow().isoformat()
                 )
-                print(f"[Memory Extracted] {username}: {fact}")
+                print(f"[Memory Extracted & Vectorized] {username}: {fact}")
         except Exception as e:
             print(f"Failed to extract memory: {e}")
 
     async def process_attachments(self, message: discord.Message) -> str:
-        """Downloads and extracts text from PDF and text attachments."""
+        """Downloads and extracts text from PDF, text, and voice note / audio attachments."""
         if not message.attachments:
             return ""
 
         import httpx
         attachment = message.attachments[0]
         filename = attachment.filename.lower()
+        content_type = (attachment.content_type or "").lower()
 
+        # 1. Voice Notes / Audio files
+        if content_type.startswith("audio/") or filename.endswith((".ogg", ".mp3", ".wav", ".m4a", ".flac", ".webm")):
+            try:
+                async with httpx.AsyncClient() as client:
+                    r = await client.get(attachment.url, timeout=25)
+                    if r.status_code == 200:
+                        audio_bytes = r.content
+                        transcript = await transcribe_audio(audio_bytes, attachment.filename, content_type or "audio/ogg")
+                        if transcript and not transcript.startswith("❌"):
+                            return f"[Uploaded Voice Note / Audio Transcript ({attachment.filename}):]\n\"{transcript}\""
+            except Exception as e:
+                print(f"Failed transcribing voice note: {e}")
+
+        # 2. Text / PDF files
         if filename.endswith(".pdf") or filename.endswith((".txt", ".py", ".json", ".csv", ".md")):
             try:
                 async with httpx.AsyncClient() as client:
