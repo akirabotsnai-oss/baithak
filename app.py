@@ -166,9 +166,31 @@ async def startup():
         bot.ai_bot = None
         await bot.add_cog(AIResidentCog(bot))
         print("[AI Resident] Registered AI Cog on the main bot.")
+    @bot.event
+    async def on_ready():
+        print(f"[Main Bot] Logged in as {bot.user} (ID: {bot.user.id})")
+        synced_guilds = []
+        for g in bot.guilds:
+            try:
+                bot.tree.copy_global_to(guild=g)
+                await bot.tree.sync(guild=g)
+                synced_guilds.append(g.name)
+            except Exception as e:
+                print(f"[Main Bot Tree Sync Error] {g.name}: {e}")
+        try:
+            await bot.tree.sync()
+        except Exception as e:
+            print(f"[Main Bot Global Tree Sync Error]: {e}")
+        print(f"[Main Bot] Connected & synced slash commands to guilds: {synced_guilds}")
 
-    if effective_bot_token and effective_bot_token != "YOUR_BOT_TOKEN_HERE":
-        asyncio.create_task(bot.start(effective_bot_token))
+    if effective_bot_token and len(effective_bot_token) > 20 and effective_bot_token != "YOUR_BOT_TOKEN_HERE":
+        async def run_main_bot():
+            try:
+                print(f"[Main Bot] Connecting to Discord Gateway...")
+                await bot.start(effective_bot_token)
+            except Exception as e:
+                print(f"[Main Bot Connection Error]: {e}")
+        asyncio.create_task(run_main_bot())
 
     # Self-ping to keep Render free tier awake 24/7
     async def keep_alive():
