@@ -30,6 +30,31 @@ async def save_guild_cfg(guild_id: str, key: str, value: str):
         str(guild_id), key, str(value)
     )
 
+async def get_bot_guild_meta(gid: str) -> dict:
+    """Helper to fetch server name and icon from active bot instance or Discord HTTP API."""
+    from app import bot, BOT_TOKEN
+    guild_obj = bot.get_guild(int(gid)) if (hasattr(bot, "get_guild") and gid.isdigit()) else None
+    if not guild_obj and hasattr(bot, "ai_bot") and bot.ai_bot and gid.isdigit():
+        guild_obj = bot.ai_bot.get_guild(int(gid))
+    if guild_obj:
+        icon_key = guild_obj.icon.key if (guild_obj.icon and hasattr(guild_obj.icon, "key")) else None
+        return {"id": str(guild_obj.id), "name": guild_obj.name, "icon": icon_key}
+    
+    # Fallback: Query Discord HTTP API using Bot Token
+    effective_token = (await cfg("BOT_TOKEN")) or BOT_TOKEN
+    if effective_token and gid.isdigit():
+        try:
+            headers = {"Authorization": f"Bot {effective_token}"}
+            async with httpx.AsyncClient() as client:
+                r = await client.get(f"https://discord.com/api/v10/guilds/{gid}", headers=headers, timeout=5)
+                if r.status_code == 200:
+                    data = r.json()
+                    return {"id": str(data["id"]), "name": data.get("name", f"Server ({gid})"), "icon": data.get("icon")}
+        except Exception as e:
+            print(f"[Guild Meta Fetch Error] {gid}: {e}")
+            
+    return {"id": str(gid), "name": f"Server ({gid})", "icon": None}
+
 # ─── Smart Routing: Main Dashboard Index ──────────────────────────────────────
 
 @ai_resident_bp.route("/")
@@ -72,12 +97,9 @@ async def index():
         for gid in all_db_gids:
             if gid not in seen and gid != "dm":
                 seen.add(gid)
-                active_guilds.append({
-                    "id": gid,
-                    "name": f"Server ({gid})",
-                    "icon": None,
-                    "is_bot_present": True
-                })
+                meta = await get_bot_guild_meta(gid)
+                meta["is_bot_present"] = True
+                active_guilds.append(meta)
 
         ctx = await base_ctx()
         return await render_template(
@@ -156,7 +178,7 @@ async def oauth_callback():
 
     client_id = await cfg("DISCORD_CLIENT_ID")
     client_secret = await cfg("DISCORD_CLIENT_SECRET")
-    redirect_uri = await cfg("DISCORD_REDIRECT_URI", "http://localhost:5000/ai_resident/oauth/callback")
+    redirect_uri = await cfg("DISCORD_REDIRECT_URI", "https://baithak-1.onrender.com/ai_resident/oauth/callback")
 
     try:
         async with httpx.AsyncClient() as client:
@@ -185,34 +207,29 @@ async def oauth_callback():
 @require_login
 @require_app_access("ai_resident")
 async def guild_settings(guild_id):
-    # Verify user has access to this guild by reading the cached OAuth token
+    is_god = is_god_or_god2()
     discord_token = session.get("discord_oauth_token")
-    if not discord_token:
-        return redirect(url_for("ai_resident.index"))
 
-    try:
-        headers = {"Authorization": f"Bearer {discord_token}"}
-        async with httpx.AsyncClient() as client:
-            r = await client.get("https://discord.com/api/users/@me/guilds", headers=headers, timeout=10)
-            if r.status_code != 200:
-                return redirect(url_for("ai_resident.index"))
-            user_guilds = r.json()
-    except Exception:
-        return redirect(url_for("ai_resident.index"))
-
-    # Verify if user has manage server rights for the requested guild
     guild_meta = None
-    for g in user_guilds:
-        if str(g["id"]) == str(guild_id):
-            perms = int(g.get("permissions", 0))
-            is_owner = g.get("owner", False)
-            if is_owner or (perms & 0x00000020) == 0x00000020:
-                guild_meta = g
-                break
+    if discord_token:
+        try:
+            headers = {"Authorization": f"Bearer {discord_token}"}
+            async with httpx.AsyncClient() as client:
+                r = await client.get("https://discord.com/api/users/@me/guilds", headers=headers, timeout=10)
+                if r.status_code == 200:
+                    for g in r.json():
+                        if str(g["id"]) == str(guild_id):
+                            perms = int(g.get("permissions", 0))
+                            is_owner = g.get("owner", False)
+                            if is_owner or (perms & 0x00000020) == 0x00000020:
+                                guild_meta = g
+                                break
+        except Exception:
+            pass
 
     if not guild_meta:
-        if await is_god_or_god2():
-            guild_meta = {"id": guild_id, "name": f"Server {guild_id}", "icon": None}
+        if is_god_or_god2():
+            guild_meta = await get_bot_guild_meta(guild_id)
         else:
             return redirect(url_for("workspace.access_denied"))
 
