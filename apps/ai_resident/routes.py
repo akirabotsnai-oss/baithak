@@ -331,6 +331,28 @@ async def global_env():
             old_val = await cfg(k)
             if old_val != val:
                 await set_cfg(k, val)
+
+        # Dynamic AI Bot launcher if AI_BOT_TOKEN was updated
+        effective_ai_token = await cfg("AI_BOT_TOKEN")
+        if effective_ai_token and len(effective_ai_token) > 20:
+            from app import bot
+            if not getattr(bot, "ai_bot", None) or getattr(bot.ai_bot, "is_closed", lambda: True)():
+                try:
+                    import discord
+                    from discord.ext import commands
+                    from apps.ai_resident.cog import AIResidentCog
+                    
+                    ai_intents = discord.Intents.default()
+                    ai_intents.message_content = True
+                    ai_intents.members = True
+                    
+                    ai_bot = commands.Bot(command_prefix="?", intents=ai_intents)
+                    bot.ai_bot = ai_bot
+                    await ai_bot.add_cog(AIResidentCog(ai_bot))
+                    asyncio.create_task(ai_bot.start(effective_ai_token))
+                    print(f"[AI Resident Dynamic Launch] Successfully launched bablu bot!")
+                except Exception as e:
+                    print(f"[AI Resident Dynamic Launch Error]: {e}")
                 
         await log_audit(session["user"], "ai_resident_env_update", "Updated system environment keys")
         success_msg = "✅ Environment configuration updated successfully!"
