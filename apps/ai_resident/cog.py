@@ -453,6 +453,18 @@ class AIResidentCog(commands.Cog):
             guild_style_notes=style_notes
         )
 
+        # Discord Presence Sleep Status Integration
+        if response.startswith("😴"):
+            try:
+                await self.bot.change_presence(status=discord.Status.idle, activity=discord.Game(name="Sleeping 😴 (power nap)"))
+            except Exception:
+                pass
+        else:
+            try:
+                await self.bot.change_presence(status=discord.Status.online, activity=discord.Game(name="Hanging out in chat ✨"))
+            except Exception:
+                pass
+
         # Output Safety Filter Check
         if not is_response_safe(response):
             print(f"[Safety Filter] Blocked unsafe response in guild {guild_id}: {response}")

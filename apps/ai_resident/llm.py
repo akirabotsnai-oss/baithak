@@ -314,7 +314,7 @@ async def generate_response(
                 print(f"[LLM Cascade Provider Error] Provider {provider} with key ...{api_key[-6:]}: {e}")
                 continue
 
-    return "❌ All available AI providers/keys are currently rate-limited. Please wait 60s!"
+    return "😴 bot got a bit tired and is taking a quick power nap... back in a bit!"
 
 async def generate_gemini_image(prompt: str) -> bytes:
     """
