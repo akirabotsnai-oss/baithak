@@ -763,10 +763,12 @@ class AIResidentCog(commands.Cog):
             return await interaction.followup.send(embed=embed, file=file)
 
         import urllib.parse
-        # Enhance brief user prompts for high-resolution artistic quality
+        # Enhance prompt naturally only if the user didn't request a specific style
         enhanced_prompt = prompt.strip()
-        if len(enhanced_prompt.split()) < 10:
-            enhanced_prompt += ", highly detailed digital art, cinematic lighting, photorealistic masterpiece, 8k resolution, vibrant colors"
+        lower_prompt = enhanced_prompt.lower()
+        has_style = any(s in lower_prompt for s in ["style", "art", "drawing", "illustration", "cartoon", "anime", "painting", "render", "sketch", "logo", "pixel"])
+        if len(enhanced_prompt.split()) < 8 and not has_style:
+            enhanced_prompt += ", high quality, detailed, realistic lighting"
 
         encoded_prompt = urllib.parse.quote(enhanced_prompt)
         
