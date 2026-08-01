@@ -50,8 +50,8 @@ async def index():
         if is_god_or_god2():
             # God Mode Admin bypass: directly show all bot active guilds without requiring Discord OAuth login!
             from app import bot
-            all_bot_guilds = list(bot.guilds)
-            if hasattr(bot, "ai_bot") and bot.ai_bot:
+            all_bot_guilds = list(bot.guilds) if hasattr(bot, "guilds") else []
+            if hasattr(bot, "ai_bot") and bot.ai_bot and hasattr(bot.ai_bot, "guilds"):
                 all_bot_guilds.extend(list(bot.ai_bot.guilds))
             
             active_guilds = []
@@ -60,10 +60,24 @@ async def index():
                 gid = str(g.id)
                 if gid not in seen:
                     seen.add(gid)
+                    icon_key = g.icon.key if (g.icon and hasattr(g.icon, "key")) else None
                     active_guilds.append({
                         "id": gid,
                         "name": g.name,
-                        "icon": g.icon.key if g.icon else None,
+                        "icon": icon_key,
+                        "is_bot_present": True
+                    })
+
+            # Also check DB configured guilds so God Mode never sees an empty list
+            db_guilds = await query("SELECT DISTINCT guild_id FROM ai_resident_guild_config") or []
+            for dg in db_guilds:
+                gid = str(dg["guild_id"])
+                if gid not in seen and gid != "dm":
+                    seen.add(gid)
+                    active_guilds.append({
+                        "id": gid,
+                        "name": f"Server ({gid})",
+                        "icon": None,
                         "is_bot_present": True
                     })
 

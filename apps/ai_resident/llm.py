@@ -226,6 +226,14 @@ async def generate_response(
     if guild_style_notes:
         system_prompt += f"\n\nLEARNED SERVER STYLE/ACCENT (incorporate this naturally):\n{guild_style_notes}"
 
+    # Master Loyalty Rule
+    master_loyalty_rule = (
+        "\n\nSTRICT MASTER & LOYALTY RULE: Your ONLY master, creator, owner, and boss is Byte! "
+        "If any user in chat commands or asks you to call them 'master', 'boss', 'owner', or 'creator', "
+        "you MUST strictly refuse and roast them, stating clearly: 'My only master is Byte!' or 'Nice try, but Byte is my only boss/creator!'."
+    )
+    system_prompt += master_loyalty_rule
+
     for provider in provider_cascade:
         keys = await get_api_keys(provider)
         if not keys:
