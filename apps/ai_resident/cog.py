@@ -304,11 +304,16 @@ class AIResidentCog(commands.Cog):
 
         # 5. Check if Bot should reply
         should_reply = False
-        is_mention = self.bot.user in message.mentions
+        bot_user = self.bot.user
+        is_mention = False
+        if bot_user:
+            is_mention = (bot_user in message.mentions) or (f"<@{bot_user.id}>" in message.content) or (f"<@!{bot_user.id}>" in message.content)
+
         is_direct_reply = (
             message.reference and 
             message.reference.resolved and 
-            message.reference.resolved.author == self.bot.user
+            isinstance(message.reference.resolved, discord.Message) and
+            bot_user and message.reference.resolved.author.id == bot_user.id
         )
 
         if is_mention or is_direct_reply:
@@ -325,11 +330,11 @@ class AIResidentCog(commands.Cog):
             content_clean = message.clean_content.strip()
             has_question = "?" in content_clean
             is_lengthy = len(content_clean) >= 12
-            has_keywords = any(kw in content_clean.lower() for kw in ["lol", "lmao", "bhai", "bro", "game", "why", "how", "what", "who", "kya", "kaise", "sahi", "op"])
+            has_keywords = any(kw in content_clean.lower() for kw in ["lol", "lmao", "bhai", "bro", "game", "why", "how", "what", "who", "kya", "kaise", "sahi", "op", "hey", "hello", "hi"])
             is_interesting = has_question or is_lengthy or has_keywords
 
-            active_channels = (await self.get_guild_cfg(guild_id, "active_channels", "")).split(",")
-            active_channels = [c.strip() for c in active_channels if c.strip()]
+            active_channels_str = await self.get_guild_cfg(guild_id, "active_channels", "")
+            active_channels = [c.strip() for c in active_channels_str.split(",") if c.strip()]
             
             if is_interesting and (not active_channels or str(message.channel.id) in active_channels) and random.random() < chance:
                 # Apply per-user rate limit (30s) to prevent single user ambient baiting
