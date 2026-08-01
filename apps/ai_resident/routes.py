@@ -413,3 +413,35 @@ async def bot_profile_update():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+# ─── God Mode: Live Bot Status Check API ─────────────────────────────────────
+
+@ai_resident_bp.route("/api/bot/status", methods=["GET"])
+@require_login
+async def bot_status():
+    from app import bot
+    main_status = {
+        "online": bot.is_ready(),
+        "user": str(bot.user) if bot.user else None,
+        "guilds": len(bot.guilds) if bot.is_ready() else 0,
+        "latency_ms": round(bot.latency * 1000, 1) if bot.is_ready() else None,
+    }
+    ai_bot = getattr(bot, "ai_bot", None)
+    ai_status = None
+    if ai_bot:
+        ai_status = {
+            "online": ai_bot.is_ready(),
+            "user": str(ai_bot.user) if ai_bot.user else None,
+            "guilds": len(ai_bot.guilds) if ai_bot.is_ready() else 0,
+            "latency_ms": round(ai_bot.latency * 1000, 1) if ai_bot.is_ready() else None,
+            "closed": ai_bot.is_closed(),
+        }
+
+    ai_token_set = bool(await cfg("AI_BOT_TOKEN"))
+    
+    return jsonify({
+        "main_bot": main_status,
+        "ai_bot": ai_status,
+        "dual_bot_mode": ai_bot is not None,
+        "ai_token_configured": ai_token_set,
+    })

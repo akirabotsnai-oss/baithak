@@ -129,9 +129,14 @@ async def startup():
     print("[Confessions] Registered Confessions Cog on the main bot.")
 
     from apps.ai_resident.cog import AIResidentCog
+
+    print(f"[Startup] effective_bot_token length: {len(effective_bot_token) if effective_bot_token else 0}")
+    print(f"[Startup] effective_ai_token length: {len(effective_ai_token) if effective_ai_token else 0}")
+    print(f"[Startup] tokens_differ: {effective_ai_token != effective_bot_token}")
     
     # Check if a separate AI Bot token is configured for Dual Bot mode
     if effective_ai_token and effective_ai_token != effective_bot_token:
+        print("[AI Resident] Starting in DUAL BOT MODE...")
         ai_intents = discord.Intents.default()
         ai_intents.message_content = True
         ai_intents.members = True
@@ -140,6 +145,7 @@ async def startup():
         
         @ai_bot.event
         async def on_ready():
+            print(f"[AI Resident] ✅ ONLINE as {ai_bot.user} (ID: {ai_bot.user.id})")
             from core.db import cfg
             gid = await cfg("guild_id", str(GUILD_ID))
             synced_guilds = []
@@ -149,20 +155,48 @@ async def startup():
                 await ai_bot.tree.sync(guild=guild_obj)
                 synced_guilds.append(gid)
             else:
-                # Auto-detect: sync to every guild the bot is in for instant results
                 for g in ai_bot.guilds:
-                    ai_bot.tree.copy_global_to(guild=g)
-                    await ai_bot.tree.sync(guild=g)
-                    synced_guilds.append(str(g.id))
-            await ai_bot.tree.sync()  # global fallback
-            print(f"[AI Resident] {ai_bot.user} — synced to guilds: {synced_guilds}")
+                    try:
+                        ai_bot.tree.copy_global_to(guild=g)
+                        await ai_bot.tree.sync(guild=g)
+                        synced_guilds.append(str(g.id))
+                    except Exception as e:
+                        print(f"[AI Resident] Sync error for guild {g.id}: {e}")
+            try:
+                await ai_bot.tree.sync()
+            except Exception as e:
+                print(f"[AI Resident] Global sync error: {e}")
+            print(f"[AI Resident] Synced slash commands to guilds: {synced_guilds}")
+
+        @ai_bot.event
+        async def on_disconnect():
+            print(f"[AI Resident] ⚠️ Disconnected from Discord Gateway")
 
         bot.ai_bot = ai_bot
-        await ai_bot.add_cog(AIResidentCog(ai_bot))
-        asyncio.create_task(ai_bot.start(effective_ai_token))
-        print("[AI Resident] Launched secondary bot client in parallel.")
+        try:
+            await ai_bot.add_cog(AIResidentCog(ai_bot))
+            print("[AI Resident] Cog loaded successfully.")
+        except Exception as e:
+            print(f"[AI Resident] ❌ Failed to load cog: {e}")
+
+        async def run_ai_bot():
+            try:
+                print(f"[AI Resident] Connecting to Discord Gateway with token length={len(effective_ai_token)}...")
+                await ai_bot.start(effective_ai_token)
+            except discord.LoginFailure as e:
+                print(f"[AI Resident] ❌ LOGIN FAILED - Invalid token! Error: {e}")
+            except Exception as e:
+                print(f"[AI Resident] ❌ Connection error: {type(e).__name__}: {e}")
+
+        asyncio.create_task(run_ai_bot())
+        print("[AI Resident] Gateway task created - waiting for on_ready...")
     else:
         # Fall back to registering the Cog on the main bot
+        print("[AI Resident] Starting in SHARED (single bot) MODE...")
+        if not effective_ai_token:
+            print("[AI Resident] Reason: AI_BOT_TOKEN is empty")
+        elif effective_ai_token == effective_bot_token:
+            print("[AI Resident] Reason: AI_BOT_TOKEN matches BOT_TOKEN (same bot)")
         bot.ai_bot = None
         await bot.add_cog(AIResidentCog(bot))
         print("[AI Resident] Registered AI Cog on the main bot.")
