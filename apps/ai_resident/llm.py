@@ -12,7 +12,7 @@ from core.db import cfg
 # Default models
 PROVIDER_DEFAULT_MODELS = {
     "groq": "llama-3.3-70b-versatile",
-    "gemini": "gemini-1.5-flash",
+    "gemini": "gemini-2.0-flash",
     "openai": "gpt-4o-mini"
 }
 
