@@ -47,11 +47,39 @@ async def index():
     # Check if we already have discord token in session
     discord_token = session.get("discord_oauth_token")
     if not discord_token:
-        # Redirect to OAuth2 authorize
-        redirect_uri = await cfg("DISCORD_REDIRECT_URI", "http://localhost:5000/ai_resident/oauth/callback")
-        encoded_uri = urllib.parse.quote(redirect_uri)
-        auth_url = f"https://discord.com/api/oauth2/authorize?client_id={client_id}&redirect_uri={encoded_uri}&response_type=code&scope=identify%20guilds"
-        return redirect(auth_url)
+        if is_god_or_god2():
+            # God Mode Admin bypass: directly show all bot active guilds without requiring Discord OAuth login!
+            from app import bot
+            all_bot_guilds = list(bot.guilds)
+            if hasattr(bot, "ai_bot") and bot.ai_bot:
+                all_bot_guilds.extend(list(bot.ai_bot.guilds))
+            
+            active_guilds = []
+            seen = set()
+            for g in all_bot_guilds:
+                gid = str(g.id)
+                if gid not in seen:
+                    seen.add(gid)
+                    active_guilds.append({
+                        "id": gid,
+                        "name": g.name,
+                        "icon": g.icon.key if g.icon else None,
+                        "is_bot_present": True
+                    })
+
+            ctx = await base_ctx()
+            return await render_template(
+                "ai_resident_index.html", 
+                **ctx, 
+                active="ai_resident", 
+                guilds=active_guilds
+            )
+        else:
+            # Regular members redirect to OAuth2 authorize
+            redirect_uri = await cfg("DISCORD_REDIRECT_URI", "https://baithak-1.onrender.com/ai_resident/oauth/callback")
+            encoded_uri = urllib.parse.quote(redirect_uri)
+            auth_url = f"https://discord.com/api/oauth2/authorize?client_id={client_id}&redirect_uri={encoded_uri}&response_type=code&scope=identify%20guilds"
+            return redirect(auth_url)
         
     # User is authenticated. Fetch user guilds from Discord.
     try:
