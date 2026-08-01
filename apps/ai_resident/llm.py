@@ -217,8 +217,8 @@ async def generate_response(
     """
     primary_provider = await cfg("ai_resident_provider", "groq")
     
-    # Provider cascade sequence: Primary first, followed by remaining providers
-    all_providers = ["groq", "gemini", "openai"]
+    # Provider cascade sequence: Primary first, followed by remaining providers (Gemini reserved for images)
+    all_providers = ["groq", "openai"]
     provider_cascade = [primary_provider] + [p for p in all_providers if p != primary_provider]
 
     # Formulate System Prompt
