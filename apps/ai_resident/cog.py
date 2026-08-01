@@ -81,21 +81,6 @@ class AIResidentCog(commands.Cog):
         self.last_message_time = defaultdict(float)
         # channel_id -> GameState
         self.active_games = {}
-
-    def get_guild_mood(self, guild_id: str) -> str:
-        """Calculates dynamic guild mood based on chat velocity and time of day."""
-        now = time.time()
-        recent_count = len([t for t in self.guild_chat_timestamps[guild_id] if now - t < 600])
-        utc_hour = datetime.utcnow().hour
-        
-        if 21 <= utc_hour or utc_hour <= 1:  # Late night India/UTC (2am-6am IST)
-            return "Sleepy / Cozy"
-        elif recent_count > 15:
-            return "Hyped / Chaotic"
-        elif recent_count > 5:
-            return "Witty / Active"
-        else:
-            return "Chill / Relaxed"
         
         # Self-harm/danger keywords
         self.danger_keywords = [
@@ -112,6 +97,21 @@ class AIResidentCog(commands.Cog):
         self.tasks_started = False
         # Per-guild message counter for rate-limiting LLM style analysis
         self._learn_counter = defaultdict(int)
+
+    def get_guild_mood(self, guild_id: str) -> str:
+        """Calculates dynamic guild mood based on chat velocity and time of day."""
+        now = time.time()
+        recent_count = len([t for t in self.guild_chat_timestamps[guild_id] if now - t < 600])
+        utc_hour = datetime.utcnow().hour
+        
+        if 21 <= utc_hour or utc_hour <= 1:  # Late night India/UTC (2am-6am IST)
+            return "Sleepy / Cozy"
+        elif recent_count > 15:
+            return "Hyped / Chaotic"
+        elif recent_count > 5:
+            return "Witty / Active"
+        else:
+            return "Chill / Relaxed"
 
     @commands.Cog.listener()
     async def on_ready(self):
