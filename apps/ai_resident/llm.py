@@ -324,6 +324,27 @@ async def generate_response(
 
     return "😴 bot got a bit tired and is taking a quick power nap... back in a bit!"
 
+async def expand_image_prompt(prompt: str) -> str:
+    """
+    Uses the free Groq model to expand a brief user prompt into a highly detailed,
+    vivid, and professional prompt for the FLUX image generator.
+    """
+    system_prompt = (
+        "You are an expert AI image prompt engineer. Your job is to take a simple, short "
+        "user description and rewrite it into a highly detailed, descriptive, and artistic prompt "
+        "for the FLUX.1 text-to-image generator. Focus on lighting, composition, style (photorealistic, "
+        "digital art, watercolor, etc.), textures, and colors. "
+        "IMPORTANT: Output ONLY the expanded prompt string. Do not write any introduction, commentary, or explanation."
+    )
+    try:
+        messages = [{"role": "user", "content": f"Expand this prompt for an image generator: {prompt}"}]
+        expanded = await generate_response(messages, preset_name="Helpful Professor", custom_system_prompt=system_prompt)
+        if expanded and not expanded.startswith("😴"):
+            return expanded.strip()
+    except Exception as e:
+        print(f"Failed to expand image prompt: {e}")
+    return prompt
+
 async def generate_gemini_image(prompt: str) -> bytes:
     """
     Generates high-resolution images using Google Imagen 3 API (imagen-3.0-generate-002).

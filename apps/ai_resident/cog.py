@@ -793,12 +793,17 @@ class AIResidentCog(commands.Cog):
             except Exception as e:
                 print(f"Stability generation failed: {e}")
 
-        # 3. High-Resolution FLUX.1 Model Fallback
+        # 3. High-Resolution FLUX.1 Model Fallback (Free & Unlimited)
+        from apps.ai_resident.llm import expand_image_prompt
+        # Expand user prompt using free Groq keys for mind-blowing artistic quality
+        enhanced_prompt = await expand_image_prompt(prompt)
+        encoded_prompt = urllib.parse.quote(enhanced_prompt)
+
         seed = random.randint(1000, 9999)
         url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width=1024&height=1024&model=flux&enhance=true&nologo=true"
         embed = discord.Embed(title=f"🎨 Imagine: {prompt[:100]}", color=0x8a2be2)
         embed.set_image(url=url)
-        embed.set_footer(text="Powered by FLUX.1 AI Model")
+        embed.set_footer(text="Powered by FLUX.1 AI Model (Groq Enhanced)")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="meme", description="Generate a captioned meme")
