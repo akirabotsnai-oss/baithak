@@ -309,7 +309,7 @@ async def global_env():
         
         # Save all config keys to config_store
         keys_to_save = [
-            "AI_BOT_TOKEN", "GROQ_API_KEY", "GEMINI_API_KEY",
+            "BOT_TOKEN", "AI_BOT_TOKEN", "GROQ_API_KEY", "GEMINI_API_KEY",
             "OPENAI_API_KEY", "STABILITY_API_KEY", "REPLICATE_API_TOKEN",
             "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_REDIRECT_URI",
             "admin_channel_id", "guild_id"
