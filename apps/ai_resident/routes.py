@@ -44,56 +44,57 @@ async def index():
         ctx = await base_ctx()
         return await render_template("ai_resident_index.html", **ctx, active="ai_resident", setup_mode=True)
         
+    # God Mode Admin bypass: directly show all bot active guilds without requiring Discord OAuth login!
+    if is_god_or_god2():
+        from app import bot
+        all_bot_guilds = list(bot.guilds) if hasattr(bot, "guilds") else []
+        if hasattr(bot, "ai_bot") and bot.ai_bot and hasattr(bot.ai_bot, "guilds"):
+            all_bot_guilds.extend(list(bot.ai_bot.guilds))
+        
+        active_guilds = []
+        seen = set()
+        for g in all_bot_guilds:
+            gid = str(g.id)
+            if gid not in seen:
+                seen.add(gid)
+                icon_key = g.icon.key if (g.icon and hasattr(g.icon, "key")) else None
+                active_guilds.append({
+                    "id": gid,
+                    "name": g.name,
+                    "icon": icon_key,
+                    "is_bot_present": True
+                })
+
+        # Also check DB configured guilds & stats so God Mode never sees an empty list
+        db_guilds = await query("SELECT DISTINCT guild_id FROM ai_resident_guild_config") or []
+        db_stats = await query("SELECT DISTINCT guild_id FROM ai_resident_stats") or []
+        all_db_gids = set([str(x["guild_id"]) for x in (db_guilds + db_stats)])
+        for gid in all_db_gids:
+            if gid not in seen and gid != "dm":
+                seen.add(gid)
+                active_guilds.append({
+                    "id": gid,
+                    "name": f"Server ({gid})",
+                    "icon": None,
+                    "is_bot_present": True
+                })
+
+        ctx = await base_ctx()
+        return await render_template(
+            "ai_resident_index.html", 
+            **ctx, 
+            active="ai_resident", 
+            guilds=active_guilds
+        )
+
     # Check if we already have discord token in session
     discord_token = session.get("discord_oauth_token")
     if not discord_token:
-        if is_god_or_god2():
-            # God Mode Admin bypass: directly show all bot active guilds without requiring Discord OAuth login!
-            from app import bot
-            all_bot_guilds = list(bot.guilds) if hasattr(bot, "guilds") else []
-            if hasattr(bot, "ai_bot") and bot.ai_bot and hasattr(bot.ai_bot, "guilds"):
-                all_bot_guilds.extend(list(bot.ai_bot.guilds))
-            
-            active_guilds = []
-            seen = set()
-            for g in all_bot_guilds:
-                gid = str(g.id)
-                if gid not in seen:
-                    seen.add(gid)
-                    icon_key = g.icon.key if (g.icon and hasattr(g.icon, "key")) else None
-                    active_guilds.append({
-                        "id": gid,
-                        "name": g.name,
-                        "icon": icon_key,
-                        "is_bot_present": True
-                    })
-
-            # Also check DB configured guilds so God Mode never sees an empty list
-            db_guilds = await query("SELECT DISTINCT guild_id FROM ai_resident_guild_config") or []
-            for dg in db_guilds:
-                gid = str(dg["guild_id"])
-                if gid not in seen and gid != "dm":
-                    seen.add(gid)
-                    active_guilds.append({
-                        "id": gid,
-                        "name": f"Server ({gid})",
-                        "icon": None,
-                        "is_bot_present": True
-                    })
-
-            ctx = await base_ctx()
-            return await render_template(
-                "ai_resident_index.html", 
-                **ctx, 
-                active="ai_resident", 
-                guilds=active_guilds
-            )
-        else:
-            # Regular members redirect to OAuth2 authorize
-            redirect_uri = await cfg("DISCORD_REDIRECT_URI", "https://baithak-1.onrender.com/ai_resident/oauth/callback")
-            encoded_uri = urllib.parse.quote(redirect_uri)
-            auth_url = f"https://discord.com/api/oauth2/authorize?client_id={client_id}&redirect_uri={encoded_uri}&response_type=code&scope=identify%20guilds"
-            return redirect(auth_url)
+        # Regular members redirect to OAuth2 authorize
+        redirect_uri = await cfg("DISCORD_REDIRECT_URI", "https://baithak-1.onrender.com/ai_resident/oauth/callback")
+        encoded_uri = urllib.parse.quote(redirect_uri)
+        auth_url = f"https://discord.com/api/oauth2/authorize?client_id={client_id}&redirect_uri={encoded_uri}&response_type=code&scope=identify%20guilds"
+        return redirect(auth_url)
         
     # User is authenticated. Fetch user guilds from Discord.
     try:
